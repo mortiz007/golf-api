@@ -7,8 +7,10 @@ namespace App\Providers;
 use App\Listings\Application\Contracts\DomainEventPublisher;
 use App\Listings\Application\Contracts\ListingProcessingDispatcher;
 use App\Listings\Domain\Contracts\ListingRepositoryPort;
+use App\Listings\Domain\Contracts\LlmPort;
 use App\Listings\Infrastructure\Dispatchers\LaravelListingProcessingDispatcher;
 use App\Listings\Infrastructure\Events\LaravelDomainEventPublisher;
+use App\Listings\Infrastructure\Llm\LlmProviderMock;
 use App\Listings\Infrastructure\Repositories\EloquentListingRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -31,7 +33,14 @@ final class ListingsServiceProvider extends ServiceProvider
 
     public function register(): void
     {
-        // Bindings declared via $this->bindings are registered automatically.
+        // The LLM adapter is config-driven (config/llm.php) so it can be swapped
+        // without touching the domain (DESIGN §V.3).
+        $this->app->bind(LlmPort::class, function ($app): LlmPort {
+            $provider = (string) config('llm.provider', 'mock');
+            $class = config("llm.providers.{$provider}", LlmProviderMock::class);
+
+            return $app->make($class);
+        });
     }
 
     public function boot(): void

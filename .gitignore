@@ -26,4 +26,9 @@ CLAUDE.md
 AGENTS.md
 .cursor/
 mcp.json
+app/abacusai/
+.abacusai/
 
+PLAN.md
+api.http
+.cursorignore

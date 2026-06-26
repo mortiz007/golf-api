@@ -4,21 +4,27 @@ declare(strict_types=1);
 
 namespace App\Listings\Infrastructure\Jobs;
 
+use App\Listings\Application\UseCases\EnrichListingUseCase;
+use App\Listings\Domain\Contracts\ListingRepositoryPort;
+use App\Listings\Domain\ValueObjects\AiEnrichmentStatus;
+use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 /**
  * Asynchronous enrichment job (DESIGN §V).
  *
- * STUB for the POST /api/listings slice. Independent of ModerationJob
- * (enrichment does NOT depend on the moderation result).
+ * Thin Infrastructure adapter that delegates to the EnrichListingUseCase.
+ * Independent of ModerationJob (enrichment does NOT depend on moderation).
  *
  * Retry policy (DESIGN §V.2): 3 attempts, exponential backoff 5s/15s/30s.
- * Definitive failure → ai_enrichment_status = failed (error in metadata);
- * job moved to failed_jobs (DLQ).
+ * Definitive failure → ai_enrichment_status = failed (error recorded in
+ * ai_enrichment); job moved to failed_jobs (DLQ).
  */
 final class EnrichmentJob implements ShouldQueue
 {
@@ -43,10 +49,24 @@ final class EnrichmentJob implements ShouldQueue
         return [5, 15, 30];
     }
 
-    public function handle(): void
+    public function handle(EnrichListingUseCase $useCase): void
     {
-        // TODO (LLM slice): resolve LlmPort, call enrich(), persist
-        // ai_enrichment + ai_enrichment_status (succeeded).
-        // On definitive failure set ai_enrichment_status = failed.
+        $useCase->execute($this->listingId);
+    }
+
+    /**
+     * Definitive-failure fallback (DESIGN §V.2 / decision Q2=A): mark enrichment
+     * as failed and record the error.
+     */
+    public function failed(Throwable $exception): void
+    {
+        app(ListingRepositoryPort::class)->updateEnrichment(
+            $this->listingId,
+            [
+                'error' => $exception->getMessage(),
+                'failed_at' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z'),
+            ],
+            AiEnrichmentStatus::FAILED,
+        );
     }
 }

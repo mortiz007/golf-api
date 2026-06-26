@@ -6,6 +6,8 @@ namespace App\Listings\Infrastructure\Repositories;
 
 use App\Listings\Domain\Contracts\ListingRepositoryPort;
 use App\Listings\Domain\Entities\Listing;
+use App\Listings\Domain\ValueObjects\AiEnrichmentStatus;
+use App\Listings\Domain\ValueObjects\ModerationStatus;
 use App\Listings\Infrastructure\Eloquent\ListingModel;
 use App\Listings\Infrastructure\Mappers\ListingMapper;
 
@@ -28,5 +30,42 @@ final class EloquentListingRepository implements ListingRepositoryPort
         );
 
         return $listing->withId((int) $model->id);
+    }
+
+    public function findById(int $id): ?Listing
+    {
+        $model = ListingModel::find($id);
+
+        return $model !== null ? $this->mapper->toDomain($model) : null;
+    }
+
+    public function updateModerationResult(int $listingId, array $result, ModerationStatus $status): void
+    {
+        $model = ListingModel::find($listingId);
+
+        if ($model === null) {
+            return;
+        }
+
+        // Only moderation columns are touched (save() persists dirty attributes
+        // only), so a concurrent enrichment write is never clobbered.
+        $model->moderation_result = $result;
+        $model->moderation_status = $status->value;
+        $model->save();
+    }
+
+    public function updateEnrichment(int $listingId, ?array $enrichment, AiEnrichmentStatus $status): void
+    {
+        $model = ListingModel::find($listingId);
+
+        if ($model === null) {
+            return;
+        }
+
+        // Only enrichment columns are touched (save() persists dirty attributes
+        // only), so a concurrent moderation write is never clobbered.
+        $model->ai_enrichment = $enrichment;
+        $model->ai_enrichment_status = $status->value;
+        $model->save();
     }
 }
