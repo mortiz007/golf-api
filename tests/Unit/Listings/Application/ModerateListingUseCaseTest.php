@@ -36,6 +36,11 @@ function fakeModerationRepository(?Listing $listing): ListingRepositoryPort
             return $listing;
         }
 
+        public function update(Listing $listing): Listing
+        {
+            return $listing;
+        }
+
         public function findById(int $id): ?Listing
         {
             return $this->listing;

@@ -32,6 +32,22 @@ final class EloquentListingRepository implements ListingRepositoryPort
         return $listing->withId((int) $model->id);
     }
 
+    public function update(Listing $listing): Listing
+    {
+        $model = ListingModel::find($listing->id());
+
+        if ($model === null) {
+            return $listing;
+        }
+
+        // toAttributes() excludes moderation_result/ai_enrichment, so those JSON
+        // payloads are preserved; save() only writes the dirty editable columns.
+        $model->fill($this->mapper->toAttributes($listing));
+        $model->save();
+
+        return $listing;
+    }
+
     public function findById(int $id): ?Listing
     {
         $model = ListingModel::find($id);

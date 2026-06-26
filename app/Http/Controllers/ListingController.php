@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreListingRequest;
+use App\Http\Requests\UpdateListingRequest;
 use App\Http\Resources\ListingResource;
 use App\Listings\Application\Commands\CreateListingCommand;
+use App\Listings\Application\Commands\UpdateListingCommand;
 use App\Listings\Application\UseCases\CreateListingUseCase;
+use App\Listings\Application\UseCases\UpdateListingUseCase;
 use App\Listings\Domain\Entities\Listing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -43,5 +46,29 @@ final class ListingController extends Controller
             ->response()
             ->setStatusCode(JsonResponse::HTTP_CREATED)
             ->header('Location', "/api/listings/{$listing->id()}");
+    }
+
+    /**
+     * PATCH /api/listings/{id} — partial update, owner-only (SPECS §4.2).
+     *
+     * Applies only the submitted fields. Changing title/description re-queues
+     * moderation; changing price/condition re-queues enrichment. Publishes
+     * ListingUpdated after commit. Returns 200; 403/404/422 are mapped from
+     * domain exceptions at the boundary (bootstrap/app.php).
+     */
+    public function update(UpdateListingRequest $request, int $id, UpdateListingUseCase $useCase): JsonResponse
+    {
+        $command = UpdateListingCommand::fromArray(
+            actorUserId: (int) $request->user()->id,
+            listingId: $id,
+            validated: $request->validated(),
+        );
+
+        /** @var Listing $listing */
+        $listing = DB::transaction(
+            static fn (): Listing => $useCase->execute($command)
+        );
+
+        return ListingResource::make($listing)->response();
     }
 }

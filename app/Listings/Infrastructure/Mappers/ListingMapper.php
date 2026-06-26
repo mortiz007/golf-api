@@ -66,6 +66,9 @@ final class ListingMapper
             moderationStatus: ModerationStatus::from($model->moderation_status),
             aiEnrichmentStatus: AiEnrichmentStatus::from($model->ai_enrichment_status),
             createdAt: $this->toImmutable($model->created_at),
+            cancelledAt: $model->cancelled_at !== null
+                ? $this->toImmutable($model->cancelled_at)
+                : null,
         );
     }
 

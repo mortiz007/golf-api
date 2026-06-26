@@ -1,8 +1,13 @@
 <?php
 
+use App\Listings\Domain\Exceptions\InvalidListingDataException;
+use App\Listings\Domain\Exceptions\ListingAccessDeniedException;
+use App\Listings\Domain\Exceptions\ListingNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,5 +20,39 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Map domain exceptions to the normative error envelope (DESIGN §VI)
+        // for JSON/API requests only.
+        $envelope = static fn (string $code, string $message, int $status): JsonResponse => new JsonResponse([
+            'error' => [
+                'code' => $code,
+                'message' => $message,
+                'details' => new stdClass,
+            ],
+        ], $status);
+
+        $exceptions->render(function (ListingNotFoundException $e, Request $request) use ($envelope): ?JsonResponse {
+            return $request->expectsJson()
+                ? $envelope('NOT_FOUND', $e->getMessage(), JsonResponse::HTTP_NOT_FOUND)
+                : null;
+        });
+
+        $exceptions->render(function (ListingAccessDeniedException $e, Request $request) use ($envelope): ?JsonResponse {
+            return $request->expectsJson()
+                ? $envelope('FORBIDDEN', $e->getMessage(), JsonResponse::HTTP_FORBIDDEN)
+                : null;
+        });
+
+        $exceptions->render(function (InvalidListingDataException $e, Request $request): ?JsonResponse {
+            if (! $request->expectsJson()) {
+                return null;
+            }
+
+            return new JsonResponse([
+                'error' => [
+                    'code' => 'VALIDATION_ERROR',
+                    'message' => 'Validation failed',
+                    'details' => $e->errors(),
+                ],
+            ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        });
     })->create();

@@ -35,6 +35,7 @@ final class Listing
         private readonly ModerationStatus $moderationStatus,
         private readonly AiEnrichmentStatus $aiEnrichmentStatus,
         private readonly DateTimeImmutable $createdAt,
+        private readonly ?DateTimeImmutable $cancelledAt = null,
     ) {}
 
     /**
@@ -63,6 +64,7 @@ final class Listing
             moderationStatus: ModerationStatus::PENDING,
             aiEnrichmentStatus: AiEnrichmentStatus::PENDING,
             createdAt: $createdAt ?? new DateTimeImmutable('now', new DateTimeZone('UTC')),
+            cancelledAt: null,
         );
     }
 
@@ -82,6 +84,7 @@ final class Listing
         ModerationStatus $moderationStatus,
         AiEnrichmentStatus $aiEnrichmentStatus,
         DateTimeImmutable $createdAt,
+        ?DateTimeImmutable $cancelledAt = null,
     ): self {
         return new self(
             id: $id,
@@ -95,6 +98,7 @@ final class Listing
             moderationStatus: $moderationStatus,
             aiEnrichmentStatus: $aiEnrichmentStatus,
             createdAt: $createdAt,
+            cancelledAt: $cancelledAt,
         );
     }
 
@@ -108,6 +112,73 @@ final class Listing
         $clone->id = $id;
 
         return $clone;
+    }
+
+    /**
+     * Returns a copy with a new title (immutable update, SPECS §4.2).
+     */
+    public function withTitle(Title $title): self
+    {
+        return $this->cloneWith(['title' => $title]);
+    }
+
+    public function withPrice(Price $price): self
+    {
+        return $this->cloneWith(['price' => $price]);
+    }
+
+    public function withCondition(ListingCondition $condition): self
+    {
+        return $this->cloneWith(['condition' => $condition]);
+    }
+
+    public function withDescription(Description $description): self
+    {
+        return $this->cloneWith(['description' => $description]);
+    }
+
+    public function withEndDate(?EndDate $endDate): self
+    {
+        return $this->cloneWith(['endDate' => $endDate]);
+    }
+
+    public function withCategoryId(int $categoryId): self
+    {
+        return $this->cloneWith(['categoryId' => $categoryId]);
+    }
+
+    public function withModerationStatus(ModerationStatus $moderationStatus): self
+    {
+        return $this->cloneWith(['moderationStatus' => $moderationStatus]);
+    }
+
+    public function withAiEnrichmentStatus(AiEnrichmentStatus $aiEnrichmentStatus): self
+    {
+        return $this->cloneWith(['aiEnrichmentStatus' => $aiEnrichmentStatus]);
+    }
+
+    /**
+     * Rebuilds the entity preserving every property except the overridden ones,
+     * keeping immutability for the readonly fields.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    private function cloneWith(array $overrides): self
+    {
+        return new self(
+            id: $this->id,
+            userId: $this->userId,
+            categoryId: $overrides['categoryId'] ?? $this->categoryId,
+            title: $overrides['title'] ?? $this->title,
+            price: $overrides['price'] ?? $this->price,
+            condition: $overrides['condition'] ?? $this->condition,
+            description: $overrides['description'] ?? $this->description,
+            endDate: array_key_exists('endDate', $overrides) ? $overrides['endDate'] : $this->endDate,
+            moderationStatus: $overrides['moderationStatus'] ?? $this->moderationStatus,
+            aiEnrichmentStatus: $overrides['aiEnrichmentStatus'] ?? $this->aiEnrichmentStatus,
+            createdAt: $this->createdAt,
+            cancelledAt: $this->cancelledAt,
+        );
     }
 
     public function id(): ?int
@@ -163,5 +234,18 @@ final class Listing
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function cancelledAt(): ?DateTimeImmutable
+    {
+        return $this->cancelledAt;
+    }
+
+    /**
+     * A cancelled (soft-deleted) listing is treated as not found (SPECS §4.2).
+     */
+    public function isCancelled(): bool
+    {
+        return $this->cancelledAt !== null;
     }
 }

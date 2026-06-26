@@ -29,6 +29,8 @@ Este documento tiene dos partes:
 | ADR-008 | Base de datos de pruebas MySQL (`golf_api_testing`) por ausencia de `pdo_sqlite` | Aceptada |
 | ADR-009 | Cableado de los tres eventos de `Listings` con clases espejo (decisión 2-B) | Aceptada |
 | ADR-010 | Lado lectura de `AuditLog`: el repositorio devuelve entidades de dominio | Aceptada |
+| ADR-011 | Integración LLM: puerto único `LlmPort`, mock conmutable y persistencia acotada por columna | Aceptada |
+| ADR-012 | `PATCH /api/listings/{id}`: owner-only y 404 resueltos en el Use Case con mapeo de excepciones de dominio | Aceptada |
 
 ---
 
@@ -182,6 +184,47 @@ app/
 - Idempotencia de escritura vía `firstOrCreate(['event_id' => ...])`: duplicado = no-op (sin error, sin fila extra).
 
 **Consecuencias.** `Application` y `Http` operan sobre dominio (no Eloquent); la `AuditLogResource` se construye desde `AuditLogEntry`.
+
+---
+
+## ADR-011 — Integración LLM: puerto único, mock conmutable y persistencia acotada por columna
+
+**Contexto.** `SPECS §6` y `DESIGN §V` definen la moderación y el enriquecimiento como dos procesos LLM asíncronos e independientes, con un adaptador desacoplado y un mock intercambiable. Tras el slice S1 los jobs (`ModerationJob`/`EnrichmentJob`) existían como stubs sin lógica.
+
+**Decisión.**
+
+- **Puerto único `LlmPort`** (`App\Listings\Domain\Contracts`) con `moderate(ModerationInput): ModerationResult` y `enrich(EnrichmentInput): EnrichmentResult` (decisión Q8=B). Los DTOs viven en `App\Listings\Domain\Llm` (`ModerationInput`/`ModerationResult`/`EnrichmentInput`/`EnrichmentResult`), inmutables y con `toArray()` en la forma normativa de `DESIGN §V.4`.
+- **Jobs → Use Cases → Ports.** Los jobs son adaptadores delgados que invocan casos de uso de Application (`ModerateListingUseCase`, `EnrichListingUseCase`), coherente con el diagrama de capas (`JB --> UC`). Los jobs nunca llaman al puerto directamente.
+- **Mock conmutable.** `LlmProviderMock` (`Infrastructure\Llm`) implementa el puerto; se enlaza vía `ListingsServiceProvider` leyendo `config/llm.php` (`LLM_PROVIDER`, default `mock`), sin tocar el dominio (decisión Q3=A). Moderación: `approved` por defecto, `rejected` ante `"scam"` o URL; enrichment: `estimated_market_value = price * factor_by_condition` (New 1.0 / Like New 0.9 / Refurbished 0.8 / Used 0.65).
+- **Persistencia acotada por columna.** Como ambos jobs corren en paralelo sin orden garantizado (ADR-003), un `save()` de fila completa provocaría last-writer-wins. Se añadieron al `ListingRepositoryPort` métodos dirigidos `updateModerationResult(...)` y `updateEnrichment(...)` que cargan el modelo y usan `save()` (solo columnas sucias), preservando la columna del otro proceso.
+- **Fallback (Q2=A / DESIGN §V.2).** El `failed()` de cada job aplica el estado de respaldo tras 3 reintentos: moderación → `moderation_status=pending`; enrichment → `ai_enrichment_status=failed`. El error se registra en la columna JSON correspondiente; el job va a `failed_jobs` (DLQ).
+
+**Consecuencias.**
+
+- No se requirió migración: las columnas `moderation_result`/`ai_enrichment` y los enums de estado ya existían (ADR-005).
+- El dominio permanece agnóstico de Laravel; el provider real es enchufable sin tocar dominio ni Application.
+- Cobertura: unit de DTOs/mock/casos de uso (puerto fake + repo en memoria) y feature de jobs end-to-end (approved/rejected, enrichment, ambos fallbacks, swap de adapter).
+
+---
+
+## ADR-012 — `PATCH /api/listings/{id}`: owner-only y 404 en el Use Case con mapeo de excepciones
+
+**Contexto.** `SPECS §4.2` exige actualización parcial, solo propietario, con re-evaluación LLM condicional y respuestas 200/403/404/422/401. `DESIGN §III` describe una "doble barrera" owner-only (Policy + revalidación en el Use Case), pero el proyecto mantiene una regla estricta de hexagonal donde `app/Http` no toca Eloquent ni repositorios.
+
+**Decisión.**
+
+- **Autorización y 404 en el Use Case.** `UpdateListingUseCase` carga el listing vía `ListingRepositoryPort::findById`; si es null o está cancelado lanza `ListingNotFoundException` (404), y si el actor no es el propietario lanza `ListingAccessDeniedException` (403). Se descarta la Policy formal de Laravel para no acoplar `app/Http` a Eloquent (se prioriza la pureza hexagonal sobre la letra de `DESIGN §III`).
+- **Mapeo de excepciones de dominio.** En `bootstrap/app.php` (`withExceptions`) se registran `render` solo para peticiones JSON que traducen `ListingNotFoundException`→404 (`NOT_FOUND`), `ListingAccessDeniedException`→403 (`FORBIDDEN`) e `InvalidListingDataException`→422 al envelope normativo (`DESIGN §VI`).
+- **Cancelado = 404.** La entidad `Listing` incorpora `cancelledAt`/`isCancelled()` (rehidratado por el mapper desde `cancelled_at`); `findById` no filtra cancelados (para no alterar el uso de los jobs LLM), la decisión del 404 recae en el caso de uso.
+- **Actualización parcial inmutable.** La entidad gana mutadores `with*` que retornan clones; `UpdateListingCommand` transporta solo las claves presentes (distingue ausente de `end_date: null`). Se detectan cambios reales con `equals()` de los VOs.
+- **Re-evaluación condicional (SPECS §4.2).** Cambios en `title`/`description` → `moderation_status=pending` + re-encolar `ModerationJob`; cambios en `price`/`condition` → `ai_enrichment_status=pending` + re-encolar `EnrichmentJob`. `category_id` es editable y **no** dispara re-evaluación.
+- **Persistencia.** Se añadió `ListingRepositoryPort::update(Listing): Listing` (Eloquent: `find` + `fill(toAttributes)` + `save`), que preserva `moderation_result`/`ai_enrichment`. Se publica `ListingUpdated` tras commit (`DB::transaction` en el controlador + publisher after-commit).
+
+**Consecuencias.**
+
+- El controlador `ListingController@update` queda delgado y reutiliza `ListingResource` (200). Nota: la respuesta emite `ai_enrichment: null` (el objeto completo pertenece al slice de `GET`).
+- `OPEN-7` (emisor real de `ListingUpdated`) queda **cerrado**: el PATCH es el emisor real consumido por `AuditLog`.
+- Persiste `OPEN-5`/`OPEN-8`: 401/429 siguen con el formato por defecto de Laravel (no el envelope normativo).
 
 ---
 
@@ -761,4 +804,89 @@ app/
 
 ---
 
-_Última actualización: cierre del slice `AuditLog` (S2-00 → S2-17); alta de ADR-009 (eventos espejo 2-B) y ADR-010 (lectura devuelve entidades de dominio)._
+---
+
+# Registro de ejecución incremental — Slice `Integración LLM`
+
+> Bitácora del slice S3 (moderación + enriquecimiento reales). Materializa `SPECS §6` y `DESIGN §V`. Cierra la deuda de los jobs stub de S1-12. Fuente de verdad: `SPECS.md` > `DESIGN.md` > este ADR.
+
+## Índice de pasos
+
+| ID | Paso | Capa |
+| --- | --- | --- |
+| S3-01 | Domain / DTOs LLM (`ModerationInput`/`Result`, `EnrichmentInput`/`Result`) | Domain |
+| S3-02 | Domain / Port `LlmPort` | Domain |
+| S3-03 | Domain / Port (ext.) `ListingRepositoryPort` (`findById`, updates acotados) | Domain |
+| S3-04 | Domain / Tests DTOs | Domain (test) |
+| S3-05 | Application / `ModerateListingUseCase` | Application |
+| S3-06 | Application / `EnrichListingUseCase` | Application |
+| S3-07 | Application / Tests (puerto fake + repo en memoria) | Application (test) |
+| S3-08 | Infra / `EloquentListingRepository` (findById + updates) | Infrastructure |
+| S3-09 | Infra / `LlmProviderMock` | Infrastructure |
+| S3-10 | Infra / Jobs `handle()` + `failed()` | Infrastructure |
+| S3-11 | Providers / binding `LlmPort` + `config/llm.php` | Providers |
+| S3-12 | Feature Tests (jobs end-to-end) | Test |
+
+## Decisiones y cumplimiento
+
+- **S3-01/02/03.** DTOs inmutables con `toArray()` normativo; puerto único `LlmPort`; `ListingRepositoryPort` ampliado con `findById` y los updates `updateModerationResult`/`updateEnrichment` (acotados por columna, ver ADR-011).
+- **S3-05/06.** Casos de uso cargan el listing (no-op si no existe), invocan el puerto y persisten resultado + estado; el fallo se propaga para reintento del job.
+- **S3-08.** `findById` rehidrata vía mapper; los updates cargan el modelo y hacen `save()` de columnas sucias (preserva la columna del otro proceso).
+- **S3-09.** `LlmProviderMock` determinista: `rejected` por `"scam"`/URL; `estimated_market_value = price * factor_by_condition`.
+- **S3-10.** `handle()` delega en los casos de uso (inyección por método); `failed()` aplica el fallback (moderación `pending` / enrichment `failed`, error en JSON).
+- **S3-11.** Binding conmutable por `config/llm.php` (default `mock`) en `ListingsServiceProvider`.
+- **S3-12.** Feature: approved/rejected, enrichment poblado, ambos fallbacks y swap de adapter. ✅ **Suite completa: 91 passed.** Pint passed.
+
+## Decisiones pendientes / abiertas (LLM)
+
+| ID | Tema | Tipo | Estado |
+| --- | --- | --- | --- |
+| OPEN-9 | Re-evaluación on-update (re-encolar al cambiar campos) | Dependencia | **Resuelta** en el slice PATCH (S4). |
+| OPEN-10 | Adaptador LLM real (proveedor externo) | Alcance | **Abierto**: fuera de alcance (SPECS #12: sin fuente externa); enchufable vía `config/llm.php`. |
+
+**Estado del plan:** S3-01 → S3-12 **completados**.
+
+---
+
+# Registro de ejecución incremental — Slice `PATCH /api/listings/{id}`
+
+> Bitácora del slice S4 (actualización parcial owner-only). Materializa `SPECS §4.2`. Fuente de verdad: `SPECS.md` > `DESIGN.md` > este ADR.
+
+## Índice de pasos
+
+| ID | Paso | Capa |
+| --- | --- | --- |
+| S4-01 | Domain / Excepciones (`ListingNotFoundException`, `ListingAccessDeniedException`) | Domain |
+| S4-02 | Domain / Entity `Listing` (`cancelledAt`/`isCancelled` + mutadores `with*`) + mapper | Domain/Infra |
+| S4-03 | Domain / Tests entidad | Domain (test) |
+| S4-04 | Domain Port + Infra / `update(Listing)` | Domain/Infra |
+| S4-05 | Application / DTO `UpdateListingCommand` (claves presentes) | Application |
+| S4-06 | Application / `UpdateListingUseCase` | Application |
+| S4-07 | Application / Tests (fakes) | Application (test) |
+| S4-08 | Http / `UpdateListingRequest` (reglas `sometimes`) | Http |
+| S4-09 | Http / `ListingController@update` + ruta PATCH | Http |
+| S4-10 | Mapeo de excepciones de dominio → envelope (bootstrap/app.php) | Http |
+| S4-11 | Feature Tests | Test |
+
+## Decisiones y cumplimiento
+
+- **S4-01/10.** Excepciones de dominio mapeadas al envelope normativo (`NOT_FOUND`/404, `FORBIDDEN`/403, `VALIDATION_ERROR`/422) solo para JSON; sin Policy de Laravel (ver ADR-012).
+- **S4-02.** Entidad con `cancelledAt`/`isCancelled()` (rehidratado por el mapper) y mutadores inmutables `with*` vía helper `cloneWith` (maneja `end_date: null` con `array_key_exists`).
+- **S4-04.** `update()` preserva `moderation_result`/`ai_enrichment` (`fill(toAttributes)` + `save`).
+- **S4-05/06.** `UpdateListingCommand` lleva solo claves presentes; el caso de uso valida 404 (null/cancelado), 403 (no-owner), aplica campos, detecta cambios con `equals()`, resetea estados y re-encola condicionalmente; publica `ListingUpdated` after-commit.
+- **S4-08.** `UpdateListingRequest` con reglas `sometimes` por campo (incl. `category_id`), sanitización condicional de title/description y envelope 422.
+- **S4-11.** Feature: 200 title→moderación, price/condition→enrichment, solo category_id sin re-encolar, 403, 404 inexistente, 404 cancelado, 422, 401. ✅ **Suite completa: 112 passed (280 assertions).** Pint passed.
+
+## Decisiones pendientes / abiertas (PATCH)
+
+| ID | Tema | Tipo | Estado |
+| --- | --- | --- | --- |
+| OPEN-7 | Emisor real de `ListingUpdated` | Deuda (2-B) | **Resuelta**: el PATCH es el emisor real consumido por `AuditLog`. |
+| OPEN-11 | `ai_enrichment` completo en la respuesta del PATCH | Mejora | **Abierto**: la `ListingResource` emite `null`; el objeto completo pertenece al slice de `GET`. |
+| OPEN-12 | Borde de medianoche `after_or_equal:today` (TZ app) vs `EndDate` (UTC) | Riesgo (bajo) | **Abierto** (mismo que OPEN-6). |
+
+**Estado del plan:** S4-01 → S4-11 **completados**.
+
+---
+
+_Última actualización: cierre de los slices `Integración LLM` (S3-01 → S3-12) y `PATCH /api/listings/{id}` (S4-01 → S4-11); alta de ADR-011 (integración LLM) y ADR-012 (PATCH owner-only). OPEN-7 cerrada._

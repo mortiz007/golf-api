@@ -29,6 +29,14 @@ interface ListingRepositoryPort
     public function save(Listing $listing): Listing;
 
     /**
+     * Persists changes to an existing Listing (PATCH, SPECS §4.2).
+     *
+     * Updates only the editable columns and the moderation/enrichment statuses,
+     * preserving moderation_result/ai_enrichment payloads.
+     */
+    public function update(Listing $listing): Listing;
+
+    /**
      * Loads a Listing by its identity, or null if it does not exist.
      */
     public function findById(int $id): ?Listing;
