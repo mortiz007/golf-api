@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Listings\Infrastructure\Eloquent;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Eloquent persistence model for the `listings` table (SPECS §3).
@@ -65,5 +67,25 @@ final class ListingModel extends Model
             'ai_enrichment' => 'array',
             'cancelled_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Owner of the listing (used for eager loading in the public query, S6-06).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Category of the listing (used for eager loading in the public query, S6-06).
+     *
+     * @return BelongsTo<CategoryModel, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(CategoryModel::class, 'category_id');
     }
 }

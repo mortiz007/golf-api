@@ -6,11 +6,13 @@ namespace App\Providers;
 
 use App\Listings\Application\Contracts\DomainEventPublisher;
 use App\Listings\Application\Contracts\ListingProcessingDispatcher;
+use App\Listings\Application\Contracts\ListingQueryPort;
 use App\Listings\Domain\Contracts\ListingRepositoryPort;
 use App\Listings\Domain\Contracts\LlmPort;
 use App\Listings\Infrastructure\Dispatchers\LaravelListingProcessingDispatcher;
 use App\Listings\Infrastructure\Events\LaravelDomainEventPublisher;
 use App\Listings\Infrastructure\Llm\LlmProviderMock;
+use App\Listings\Infrastructure\Repositories\EloquentListingQueryRepository;
 use App\Listings\Infrastructure\Repositories\EloquentListingRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +29,7 @@ final class ListingsServiceProvider extends ServiceProvider
      */
     public array $bindings = [
         ListingRepositoryPort::class => EloquentListingRepository::class,
+        ListingQueryPort::class => EloquentListingQueryRepository::class,
         ListingProcessingDispatcher::class => LaravelListingProcessingDispatcher::class,
         DomainEventPublisher::class => LaravelDomainEventPublisher::class,
     ];

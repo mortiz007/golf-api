@@ -7,6 +7,13 @@ use App\Http\Controllers\ListingController;
 use Illuminate\Support\Facades\Route;
 
 /*
+ * Public API routes (SPECS §4).
+ *
+ * No authentication: anyone can browse the public listing (SPECS §4.4).
+ */
+Route::get('/listings', [ListingController::class, 'index'])->name('listings.index');
+
+/*
  * Authenticated API routes (SPECS §4).
  *
  * Sanctum bearer auth (401 without a valid token) + per-user throttle

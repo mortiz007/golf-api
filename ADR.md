@@ -31,6 +31,8 @@ Este documento tiene dos partes:
 | ADR-010 | Lado lectura de `AuditLog`: el repositorio devuelve entidades de dominio | Aceptada |
 | ADR-011 | Integración LLM: puerto único `LlmPort`, mock conmutable y persistencia acotada por columna | Aceptada |
 | ADR-012 | `PATCH /api/listings/{id}`: owner-only y 404 resueltos en el Use Case con mapeo de excepciones de dominio | Aceptada |
+| ADR-013 | `DELETE /api/listings/{id}`: cancelación idempotente (204) vs 404 de PATCH; persistencia acotada por columna | Aceptada |
+| ADR-014 | `GET /api/listings`: lado lectura con read models (CQRS-lite) y `user: { first_name, last_name }` derivado de `name` | Aceptada |
 
 ---
 
@@ -225,6 +227,50 @@ app/
 - El controlador `ListingController@update` queda delgado y reutiliza `ListingResource` (200). Nota: la respuesta emite `ai_enrichment: null` (el objeto completo pertenece al slice de `GET`).
 - `OPEN-7` (emisor real de `ListingUpdated`) queda **cerrado**: el PATCH es el emisor real consumido por `AuditLog`.
 - Persiste `OPEN-5`/`OPEN-8`: 401/429 siguen con el formato por defecto de Laravel (no el envelope normativo).
+
+---
+
+## ADR-013 — `DELETE /api/listings/{id}`: cancelación idempotente y persistencia acotada por columna
+
+**Contexto.** `SPECS §4.3` exige un soft-delete owner-only que publique `ListingDeleted`, con respuestas 204/403/404/401 y, por la decisión #15, **idempotencia**: un DELETE sobre un listing ya cancelado responde 204. Esto contrasta con `PATCH` (ADR-012), donde un listing cancelado se trata como 404.
+
+**Decisión.**
+
+- **Orden de comprobaciones en el Use Case.** `CancelListingUseCase::execute(int $listingId, int $actorUserId)` aplica `findById` → null ⇒ `ListingNotFoundException` (404); actor distinto del propietario ⇒ `ListingAccessDeniedException` (403); ya cancelado ⇒ **no-op** (return). Solo un listing inexistente es 404; un cancelado es 204. La autorización (403) se evalúa **antes** que la idempotencia, de modo que la propiedad se exige incluso sobre listings ya cancelados.
+- **No re-publicación en idempotencia (#15).** Sobre un listing ya cancelado **no** se re-persiste ni se re-publica `ListingDeleted`, evitando filas de auditoría duplicadas en `AuditLog`.
+- **Primitivos en lugar de Command DTO.** El caso de uso recibe `listingId`/`actorUserId` (consistente con `QueryAuditLogsUseCase`, YAGNI), sin un `CancelListingCommand`.
+- **Persistencia acotada por columna.** Se añadió `ListingRepositoryPort::cancel(Listing): void`; el adaptador Eloquent toca **solo** `cancelled_at` (`save()` de columnas sucias), preservando `moderation_result`/`ai_enrichment` (mismo patrón que ADR-011).
+- **Entidad de dominio.** `Listing::cancel(?DateTimeImmutable)` retorna un clon inmutable con `cancelledAt` fijado (default now UTC); `cloneWith()` ahora transporta `cancelledAt` vía `array_key_exists`.
+- **Mapeo de excepciones reutilizado.** No se tocó `bootstrap/app.php`: los `render` de `ListingNotFoundException`/`ListingAccessDeniedException` (ADR-012) ya cubren 404/403. El controlador `destroy` envuelve el caso de uso en `DB::transaction` y responde `204` (`noContent`).
+
+**Consecuencias.**
+
+- `OPEN-7`-style: el DELETE es ahora el **emisor real** de `ListingDeleted` consumido por `AuditLog` (antes solo cableado con eventos sintéticos, ADR-009).
+- Persiste `OPEN-5`/`OPEN-8`: 401/429 con formato por defecto de Laravel.
+
+**Confianza:** alta.
+
+---
+
+## ADR-014 — `GET /api/listings`: lado lectura con read models (CQRS-lite) y forma `user`/`category`
+
+**Contexto.** `SPECS §4.4` define un listado público (sin auth) con filtros, visibilidad/orden condicionados por `show_all` (#4, #5), paginación e ítems que incluyen `user { first_name, last_name }`, `category { id, name }` y `ai_enrichment`. La entidad de dominio `Listing` solo porta `userId`/`categoryId` (enteros), por lo que rehidratarla (como el lado lectura de `AuditLog`, ADR-010) no alcanza para exponer los nombres unidos.
+
+**Decisión.**
+
+- **Read models (CQRS-lite).** Se introduce un lado lectura separado del write-side: `ListingListItem` (read model en `Application/ReadModels`), `ListListingsQuery` (DTO de filtros con `fromValidated()` y defaults `show_all=false`/`page=1`/`per_page=20`), puerto `ListingQueryPort::search(): LengthAwarePaginator` (contrato genérico de Illuminate, no Eloquent), `ListListingsUseCase` y el adaptador `EloquentListingQueryRepository`. La entidad `Listing` de escritura **no se toca**. A diferencia de ADR-010, el lado lectura retorna **read models**, no entidades de dominio.
+- **Forma `user: { first_name, last_name }` (divergencia ADR-002).** Se sigue la letra de `SPECS §4.4`, derivando ambos campos del único campo `name` (primer token → `first_name`; resto → `last_name`; cadena vacía si es un solo token), realizado en la `ListingListItemResource`. Esto **diverge** del `user: { name }` (opción 2-B) adoptado en ADR-002 para `POST`/`PATCH`; decisión explícita del usuario para este endpoint.
+- **`CategoryModel` + eager loading.** No existía modelo Eloquent de categorías (solo `CategorySeeder`). Se crea `CategoryModel` (adaptador read-only) y se añaden relaciones `belongsTo` `user()`/`category()` a `ListingModel`; el repositorio usa `with(['user:id,name','category:id,name'])` para evitar N+1 (laravel-best-practices §1).
+- **Visibilidad/orden (#4, #5).** `show_all=false` → `moderation_status='approved'` + `cancelled_at IS NULL` + (`end_date >= today` OR `end_date IS NULL`), orden `created_at ASC`; `show_all=true` → todos, orden `price DESC`. Se apoyan en los índices existentes (`(moderation_status, end_date)`, `price`, `created_at`).
+- **Validación y `per_page`.** `ListListingsRequest` valida los query params con el envelope normativo `VALIDATION_ERROR`/422; `per_page` se valida `max:100` (422 si excede, en lugar de clamp silencioso). `prepareForValidation()` normaliza `show_all` para que la regla `boolean` acepte `"true"`/`"false"`.
+- **Ruta pública.** `GET /api/listings` se registra **fuera** del grupo `auth:sanctum`/`throttle` (la decisión #23 aplica solo a rutas autenticadas).
+
+**Consecuencias.**
+
+- `OPEN-11` (objeto `ai_enrichment` completo) queda **cubierto**: este endpoint expone el payload `ai_enrichment` real (null o JSON), como se había diferido en S1-16/ADR-012.
+- Nueva divergencia documentada: la API es ahora inconsistente en la forma de `user` (`{ name }` en escritura vs `{ first_name, last_name }` en el listado), por decisión explícita.
+
+**Confianza:** alta.
 
 ---
 
@@ -889,4 +935,82 @@ app/
 
 ---
 
-_Última actualización: cierre de los slices `Integración LLM` (S3-01 → S3-12) y `PATCH /api/listings/{id}` (S4-01 → S4-11); alta de ADR-011 (integración LLM) y ADR-012 (PATCH owner-only). OPEN-7 cerrada._
+---
+
+# Registro de ejecución incremental — Slice `DELETE /api/listings/{id}`
+
+> Bitácora del slice S5 (cancelación owner-only, soft-delete idempotente). Materializa `SPECS §4.3` + decisiones #15 (204 idempotente) y #16 (re-listado no permitido). Espeja el slice PATCH (S4, ADR-012). Fuente de verdad: `SPECS.md` > `DESIGN.md` > este ADR.
+
+## Índice de pasos
+
+| ID | Paso | Capa |
+| --- | --- | --- |
+| S5-01 | Domain / Entity `Listing::cancel()` + `cloneWith` transporta `cancelledAt` | Domain |
+| S5-02 | Domain Port + Infra / `cancel(Listing)` (escritura acotada por columna) | Domain/Infra |
+| S5-03 | Application / `CancelListingUseCase` (404 → 403 → 204 idempotente) | Application |
+| S5-04 | Application / Tests (fakes) | Application (test) |
+| S5-05 | Http / `ListingController@destroy` + ruta DELETE | Http |
+| S5-06 | Feature Tests | Test |
+
+## Decisiones y cumplimiento
+
+- **S5-01.** `Listing::cancel(?DateTimeImmutable)` retorna un clon inmutable con `cancelledAt` (default now UTC); `cloneWith()` transporta `cancelledAt` vía `array_key_exists` (antes siempre preservaba el valor original).
+- **S5-02.** `ListingRepositoryPort::cancel(Listing): void`; el adaptador Eloquent toca solo `cancelled_at` (preserva `moderation_result`/`ai_enrichment`).
+- **S5-03.** Orden `404` (inexistente) → `403` (no-owner) → `204` (idempotente, no-op sin re-publicar). Firma con primitivos (`listingId`, `actorUserId`); publica `ListingDeleted` after-commit solo en la cancelación real. Ver **ADR-013**.
+- **S5-05.** Controlador delgado: `DB::transaction` + `response()->noContent()` (204). Ruta `DELETE /api/listings/{id}` (`listings.destroy`) en el grupo `auth:sanctum` + `throttle:60,1`. Sin cambios en `bootstrap/app.php` (mapeos 404/403 ya existentes).
+- **S5-06.** Feature: 204 + `cancelled_at` set + `ListingDeleted` despachado + 1 fila `deleted` en `listing_audit_logs`; idempotencia (segundo DELETE 204 sin fila extra); 403 (listing sigue sin cancelar); 404 inexistente; 401 sin token. Se actualizaron los 3 fakes de repositorio existentes con el nuevo `cancel()`. ✅ **Suite completa: 123 passed (307 assertions).** Pint passed.
+
+## Decisiones pendientes / abiertas (DELETE)
+
+| ID | Tema | Tipo | Estado |
+| --- | --- | --- | --- |
+| OPEN-7 | Emisor real de `ListingDeleted` | Deuda (2-B) | **Resuelta**: el DELETE es el emisor real consumido por `AuditLog`. |
+| OPEN-5/8 | Envelope `401`/`429` | Mejora | **Abierto**: formato por defecto de Laravel. |
+
+**Estado del plan:** S5-01 → S5-06 **completados**.
+
+---
+
+---
+
+# Registro de ejecución incremental — Slice `GET /api/listings`
+
+> Bitácora del slice S6 (listado público con filtros, visibilidad y paginación). Materializa `SPECS §4.4` + decisiones #4, #5, #6, #7. Lado lectura CQRS-lite. Fuente de verdad: `SPECS.md` > `DESIGN.md` > este ADR.
+
+## Índice de pasos
+
+| ID | Paso | Capa |
+| --- | --- | --- |
+| S6-01 | Application / read model `ListingListItem` + DTO `ListListingsQuery` | Application |
+| S6-02 | Application / Port `ListingQueryPort` | Application |
+| S6-03 | Application / `ListListingsUseCase` | Application |
+| S6-04 | Application / Tests (DTO + fake port) | Application (test) |
+| S6-05 | Infra / `CategoryModel` + relaciones `user()`/`category()` en `ListingModel` | Infrastructure |
+| S6-06 | Infra / `EloquentListingQueryRepository` (filtros, visibilidad, orden, eager-load, map) | Infrastructure |
+| S6-07 | Providers / binding `ListingQueryPort` → adaptador | Providers |
+| S6-08 | Http / `ListListingsRequest` (validación de query + envelope 422) | Http |
+| S6-09 | Http / `ListingListItemResource` (forma SPECS, split de `name`, objeto `category`) | Http |
+| S6-10 | Http / `ListingController@index` + ruta pública GET | Http |
+| S6-11 | Feature Tests | Test |
+
+## Decisiones y cumplimiento
+
+- **S6-01/02/03.** Lado lectura separado del dominio de escritura: `ListingListItem` (read model con nombres unidos + `ai_enrichment`), `ListListingsQuery` (defaults `show_all=false`/`page=1`/`per_page=20`), `ListingQueryPort::search(): LengthAwarePaginator` (contrato genérico, no Eloquent) y `ListListingsUseCase` delegando en el puerto. Ver **ADR-014**.
+- **S6-05/06.** Nuevo `CategoryModel` (adaptador read-only) y relaciones `belongsTo` en `ListingModel`; el repositorio aplica filtros (`min_price`/`max_price`/`category_id`/`condition`/`q` sobre title+description), visibilidad/orden (#4, #5) y `with(['user:id,name','category:id,name'])` para evitar N+1; pagina y mapea a read models con `through()`.
+- **S6-08.** `ListListingsRequest`: reglas `nullable` por param, `per_page` `max:100` (422 si excede), `prepareForValidation()` normaliza `show_all` para la regla `boolean`; envelope `VALIDATION_ERROR`/422.
+- **S6-09.** `ListingListItemResource`: forma `SPECS §4.4`; `user: { first_name, last_name }` derivado del campo `name` (divergencia ADR-002, decisión del usuario); `category: { id, name }`; `ai_enrichment` passthrough; wrapping `data` para metadatos de paginación.
+- **S6-10.** Ruta pública `GET /api/listings` (`listings.index`) **fuera** del grupo `auth:sanctum`.
+- **S6-11.** Feature: visibilidad por defecto + orden `created_at ASC`; `end_date` futuro/null; `show_all=true` + orden `price DESC`; filtros (rango de precio, categoría, condición, `q`); paginación (`per_page`/`page`); forma del ítem (split de nombre, objeto categoría, `ai_enrichment` null/poblado); 422 con param inválido; acceso público sin token. ✅ **Suite completa: 135 passed (372 assertions).** Pint passed.
+
+## Decisiones pendientes / abiertas (GET listado)
+
+| ID | Tema | Tipo | Estado |
+| --- | --- | --- | --- |
+| OPEN-11 | `ai_enrichment` completo en la respuesta | Mejora | **Resuelta**: el listado expone el `ai_enrichment` real (null o JSON). |
+| OPEN-13 | Inconsistencia de forma de `user` (`{ name }` escritura vs `{ first_name, last_name }` listado) | Divergencia | **Aceptada** (decisión explícita del usuario, ADR-014). |
+
+**Estado del plan:** S6-01 → S6-11 **completados**.
+
+---
+
+_Última actualización: cierre de los slices `DELETE /api/listings/{id}` (S5-01 → S5-06) y `GET /api/listings` (S6-01 → S6-11); alta de ADR-013 (cancelación idempotente) y ADR-014 (listado público con read models). OPEN-7 y OPEN-11 cerradas; alta de OPEN-13 (forma de `user`)._

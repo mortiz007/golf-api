@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ListListingsRequest;
 use App\Http\Requests\StoreListingRequest;
 use App\Http\Requests\UpdateListingRequest;
+use App\Http\Resources\ListingListItemResource;
 use App\Http\Resources\ListingResource;
 use App\Listings\Application\Commands\CreateListingCommand;
 use App\Listings\Application\Commands\UpdateListingCommand;
+use App\Listings\Application\Queries\ListListingsQuery;
 use App\Listings\Application\UseCases\CancelListingUseCase;
 use App\Listings\Application\UseCases\CreateListingUseCase;
+use App\Listings\Application\UseCases\ListListingsUseCase;
 use App\Listings\Application\UseCases\UpdateListingUseCase;
 use App\Listings\Domain\Entities\Listing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +31,19 @@ use Illuminate\Support\Facades\DB;
  */
 final class ListingController extends Controller
 {
+    /**
+     * GET /api/listings — public, paginated listing with filters (SPECS §4.4).
+     *
+     * Visibility/ordering depend on show_all (#4, #5). Returns 200 paginated;
+     * invalid query params yield a 422 envelope via the FormRequest.
+     */
+    public function index(ListListingsRequest $request, ListListingsUseCase $useCase): AnonymousResourceCollection
+    {
+        $query = ListListingsQuery::fromValidated($request->validated());
+
+        return ListingListItemResource::collection($useCase->execute($query));
+    }
+
     /**
      * POST /api/listings — create a listing (SPECS §4.1).
      *
