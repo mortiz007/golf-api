@@ -15,5 +15,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function (): void {
     Route::post('/listings', [ListingController::class, 'store'])->name('listings.store');
     Route::patch('/listings/{id}', [ListingController::class, 'update'])->name('listings.update');
+    Route::delete('/listings/{id}', [ListingController::class, 'destroy'])->name('listings.destroy');
     Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
 });

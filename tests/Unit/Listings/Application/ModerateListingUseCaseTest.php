@@ -46,6 +46,8 @@ function fakeModerationRepository(?Listing $listing): ListingRepositoryPort
             return $this->listing;
         }
 
+        public function cancel(Listing $listing): void {}
+
         public function updateModerationResult(int $listingId, array $result, ModerationStatus $status): void
         {
             $this->moderationWrite = ['listingId' => $listingId, 'result' => $result, 'status' => $status];

@@ -42,6 +42,13 @@ interface ListingRepositoryPort
     public function findById(int $id): ?Listing;
 
     /**
+     * Soft-deletes a Listing (DELETE, SPECS §4.3) by persisting its
+     * cancelled_at timestamp, touching only that column so the other
+     * persisted state (moderation/enrichment payloads) is preserved.
+     */
+    public function cancel(Listing $listing): void;
+
+    /**
      * Persists the moderation outcome, touching only the moderation columns so
      * concurrent enrichment writes are never clobbered (jobs run in parallel).
      *

@@ -55,6 +55,20 @@ final class EloquentListingRepository implements ListingRepositoryPort
         return $model !== null ? $this->mapper->toDomain($model) : null;
     }
 
+    public function cancel(Listing $listing): void
+    {
+        $model = ListingModel::find($listing->id());
+
+        if ($model === null) {
+            return;
+        }
+
+        // Only the cancelled_at column is touched (save() persists dirty
+        // attributes only), preserving moderation/enrichment payloads.
+        $model->cancelled_at = $listing->cancelledAt();
+        $model->save();
+    }
+
     public function updateModerationResult(int $listingId, array $result, ModerationStatus $status): void
     {
         $model = ListingModel::find($listingId);

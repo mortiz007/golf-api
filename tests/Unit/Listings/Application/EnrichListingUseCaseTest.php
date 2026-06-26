@@ -44,6 +44,8 @@ function fakeEnrichmentRepository(?Listing $listing): ListingRepositoryPort
             return $this->listing;
         }
 
+        public function cancel(Listing $listing): void {}
+
         public function updateModerationResult(int $listingId, array $result, ModerationStatus $status): void {}
 
         public function updateEnrichment(int $listingId, ?array $enrichment, AiEnrichmentStatus $status): void

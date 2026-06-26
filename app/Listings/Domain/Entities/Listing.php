@@ -158,6 +158,17 @@ final class Listing
     }
 
     /**
+     * Returns a cancelled (soft-deleted) copy of this listing (SPECS §4.3).
+     * Defaults the cancellation timestamp to now (UTC).
+     */
+    public function cancel(?DateTimeImmutable $cancelledAt = null): self
+    {
+        return $this->cloneWith([
+            'cancelledAt' => $cancelledAt ?? new DateTimeImmutable('now', new DateTimeZone('UTC')),
+        ]);
+    }
+
+    /**
      * Rebuilds the entity preserving every property except the overridden ones,
      * keeping immutability for the readonly fields.
      *
@@ -177,7 +188,7 @@ final class Listing
             moderationStatus: $overrides['moderationStatus'] ?? $this->moderationStatus,
             aiEnrichmentStatus: $overrides['aiEnrichmentStatus'] ?? $this->aiEnrichmentStatus,
             createdAt: $this->createdAt,
-            cancelledAt: $this->cancelledAt,
+            cancelledAt: array_key_exists('cancelledAt', $overrides) ? $overrides['cancelledAt'] : $this->cancelledAt,
         );
     }
 

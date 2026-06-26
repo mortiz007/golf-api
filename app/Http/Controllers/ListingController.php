@@ -9,10 +9,13 @@ use App\Http\Requests\UpdateListingRequest;
 use App\Http\Resources\ListingResource;
 use App\Listings\Application\Commands\CreateListingCommand;
 use App\Listings\Application\Commands\UpdateListingCommand;
+use App\Listings\Application\UseCases\CancelListingUseCase;
 use App\Listings\Application\UseCases\CreateListingUseCase;
 use App\Listings\Application\UseCases\UpdateListingUseCase;
 use App\Listings\Domain\Entities\Listing;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -70,5 +73,22 @@ final class ListingController extends Controller
         );
 
         return ListingResource::make($listing)->response();
+    }
+
+    /**
+     * DELETE /api/listings/{id} — cancel (soft-delete), owner-only (SPECS §4.3).
+     *
+     * Sets cancelled_at and publishes ListingDeleted after commit. Cancelling an
+     * already-cancelled listing is idempotent (still 204, decision #15).
+     * Returns 204; 403/404 are mapped from domain exceptions at the boundary
+     * (bootstrap/app.php).
+     */
+    public function destroy(int $id, Request $request, CancelListingUseCase $useCase): Response
+    {
+        DB::transaction(
+            static fn () => $useCase->execute($id, (int) $request->user()->id)
+        );
+
+        return response()->noContent();
     }
 }
