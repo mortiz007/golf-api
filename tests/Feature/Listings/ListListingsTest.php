@@ -185,6 +185,23 @@ it('returns 422 with the normative envelope on an invalid query param', function
         ->assertJsonStructure(['error' => ['code', 'message', 'details']]);
 });
 
+it('returns 422 when show_all is not a recognized boolean', function () {
+    $this->getJson('/api/listings?show_all=banana')
+        ->assertUnprocessable()
+        ->assertJsonPath('error.code', 'VALIDATION_ERROR')
+        ->assertJsonStructure(['error' => ['code', 'message', 'details']]);
+});
+
+it('accepts show_all=false as a valid boolean query param', function () {
+    $user = User::factory()->create();
+    $categoryId = seedCategoryForList();
+    seedListingForList($user->id, $categoryId, ['title' => 'Visible']);
+
+    $this->getJson('/api/listings?show_all=false')
+        ->assertOk()
+        ->assertJsonCount(1, 'data');
+});
+
 it('is publicly accessible without a token', function () {
     $user = User::factory()->create();
     $categoryId = seedCategoryForList();

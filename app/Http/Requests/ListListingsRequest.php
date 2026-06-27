@@ -29,9 +29,12 @@ final class ListListingsRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if ($this->has('show_all')) {
-            $this->merge([
-                'show_all' => filter_var($this->query('show_all'), FILTER_VALIDATE_BOOLEAN),
-            ]);
+            $raw = $this->query('show_all');
+            $normalized = filter_var($raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+            // Keep the raw value when it is not a recognized boolean so the
+            // 'boolean' rule rejects it (422) instead of coercing it to false.
+            $this->merge(['show_all' => $normalized ?? $raw]);
         }
     }
 
