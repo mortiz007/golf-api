@@ -3,9 +3,11 @@
 use App\Listings\Domain\Exceptions\InvalidListingDataException;
 use App\Listings\Domain\Exceptions\ListingAccessDeniedException;
 use App\Listings\Domain\Exceptions\ListingNotFoundException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -54,5 +56,22 @@ return Application::configure(basePath: dirname(__DIR__))
                     'details' => $e->errors(),
                 ],
             ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
+        });
+
+        $exceptions->render(function (AuthenticationException $e, Request $request) use ($envelope): ?JsonResponse {
+            return $request->expectsJson()
+                ? $envelope('UNAUTHENTICATED', 'Unauthenticated.', JsonResponse::HTTP_UNAUTHORIZED)
+                : null;
+        });
+
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) use ($envelope): ?JsonResponse {
+            if (! $request->expectsJson()) {
+                return null;
+            }
+
+            // Preserve the rate-limit headers (Retry-After, X-RateLimit-*) emitted
+            // by the throttle middleware on the normative envelope (DESIGN §VI).
+            return $envelope('RATE_LIMITED', 'Too many requests.', JsonResponse::HTTP_TOO_MANY_REQUESTS)
+                ->withHeaders($e->getHeaders());
         });
     })->create();
