@@ -328,6 +328,7 @@ Fechas en ISO 8601 / UTC; `price` serializado como decimal.
 | Autorización          | Use Cases (owner-only) + `throttle:60,1`                        |
 | Testing               | Pest (unit + feature)                                           |
 | Linter / estilo       | Laravel Pint (PSR-12)                                           |
+| Telemetría            | Logs estructurados JSON Lines a `stdout` (canal Monolog dedicado) |
 
 ---
 
@@ -346,6 +347,7 @@ app/
     Application/     # RecordAuditLog (escritura), QueryAuditLogs (lectura), Commands
     Infrastructure/  # Listener (ShouldQueue), Eloquent repo, Mapper
   Http/              # Controllers, Requests (FormRequests), Resources, Middlewares (capa transversal)
+  Support/           # Utilidades transversales (p.ej. Telemetry: emisor de logs estructurados)
   Providers/         # ServiceProviders (bindings Port→Adapter)
 database/
   migrations/
@@ -500,8 +502,8 @@ Al crear o actualizar se encolan **dos jobs independientes y paralelos** en la m
 - **Idioma:** código y comentarios en inglés; nombres auto-descriptivos.
 - **Documentación:** DocStrings en clases/métodos públicos; comentarios solo donde aporten valor.
 - **Estilo:** PSR-12 + Laravel Pint.
-- **Telemetría:** logs estructurados en las fronteras del sistema (controladores, jobs, adaptador LLM).
-- **Testing:** Pest para unit y feature. Pruebas de dominio aisladas con mocks de puertos. La suite cubre happy-path de cada endpoint, idempotencia de `AuditLog` y fallback de moderación. La suite se ejecuta contra MySQL en la base dedicada `golf_api_testing` con `RefreshDatabase`.
+- **Telemetría:** logs estructurados en las fronteras del sistema (controladores, jobs, adaptador LLM). Detalle en §9.2.
+- **Testing:** Pest para unit y feature. Pruebas de dominio aisladas con mocks de puertos. La suite cubre happy-path de cada endpoint, idempotencia de `AuditLog`, fallback de moderación y la telemetría de fronteras (HTTP, jobs, listener de auditoría), incluyendo la no fuga de contenido sensible. La suite se ejecuta contra MySQL en la base dedicada `golf_api_testing` con `RefreshDatabase`.
 
 ### 9.1 Seeders
 
@@ -511,3 +513,26 @@ Orden de dependencia: `CategorySeeder → UserSeeder → ListingSeeder → Token
 - `UserSeeder`: usuarios con `name`, `email`, `password` (bcrypt).
 - `TokenSeeder`: tokens Sanctum pre-sembrados.
 - `ListingSeeder`: registros que cubren los escenarios de visibilidad del listado público.
+
+### 9.2 Telemetría operacional (logs estructurados)
+
+Telemetría operacional para observabilidad, **independiente del bounded context `AuditLog`**: no se persiste en base de datos ni se mezcla con la auditoría de negocio (que sigue alimentándose solo por eventos de dominio, §4). Es telemetría per-layer: cada frontera registra sus eventos de forma autónoma, sin id de correlación cruzado request→job.
+
+**Canal y formato.** Canal Monolog dedicado `stdout` (`config/logging.php`): `JsonFormatter` → `php://stdout` con `appendNewline` (una línea JSON por evento, *JSON Lines*) y `name => 'stdout'`. No altera el canal por defecto (`stack`/`single`), de modo que el log de archivo de la aplicación queda intacto.
+
+**Emisor central.** `App\Support\Telemetry` se registra como singleton (`AppServiceProvider`) enlazado a `Log::channel('stdout')` y expone `event(string $event, array $context = [], string $level = 'info')`, garantizando una forma uniforme. El nombre de evento es el `message` del registro y los campos estructurados viajan en `context`.
+
+**Convención de nombres.** `<area>.<evento>`.
+
+**Fronteras instrumentadas y eventos:**
+
+| Frontera                          | Implementación                                  | Eventos                                       | Campos de `context`                                              |
+| --------------------------------- | ----------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------- |
+| HTTP (controladores)              | Middleware terminable `LogHttpTelemetry` (grupo `api`) | `http.request`, `http.outcome`         | `method`, `path`, `status`, `duration_ms`, `user_id`            |
+| Jobs LLM                          | `ModerationJob`, `EnrichmentJob`                | `job.start`, `job.outcome`, `job.failed`      | `job`, `listing_id`, `attempt`, `outcome`, `duration_ms`        |
+| Listener de auditoría (async)     | `RecordAuditLogListener`                         | `job.start`, `job.outcome`, `job.failed`      | `job` (=`audit_log`), `action`, `listing_id`, `event_id`, `attempt`, `outcome`, `duration_ms` |
+| Adaptador LLM                     | `OllamaLlmProvider`, `OllamaResponseMapper`     | `ollama.request`, `ollama.outcome`            | `operation`, `endpoint`, `model`, `outcome`, `status`, `reason` |
+
+`http.outcome` se emite en `terminate()` para capturar el status final incluso de respuestas de error renderizadas en `bootstrap/app.php`. Los `job.outcome` distinguen `success`/`error`; `job.failed` (nivel `warning`) se emite al agotar reintentos (DLQ) sin alterar el fallback de negocio existente.
+
+**Privacidad.** Solo se registran identificadores y metadatos. Nunca contenido de usuario (`title`, `description`) ni datos sensibles (`email`, `password`, token), ni la query string (el middleware registra `path` sin querystring para no filtrar el parámetro `q`).
