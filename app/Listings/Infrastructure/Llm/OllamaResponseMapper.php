@@ -7,9 +7,9 @@ namespace App\Listings\Infrastructure\Llm;
 use App\Listings\Domain\Llm\EnrichmentResult;
 use App\Listings\Domain\Llm\ModerationResult;
 use App\Listings\Domain\ValueObjects\ModerationStatus;
+use App\Support\Telemetry;
 use DateTimeImmutable;
 use DateTimeZone;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Validates a decoded Ollama JSON payload against the normative shapes
@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Log;
 final class OllamaResponseMapper
 {
     private const CURRENCY = 'USD';
+
+    public function __construct(private readonly Telemetry $telemetry) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -141,7 +143,7 @@ final class OllamaResponseMapper
 
     private function fail(string $operation, string $reason): never
     {
-        Log::warning('ollama.outcome', ['operation' => $operation, 'outcome' => 'invalid_schema', 'reason' => $reason]);
+        $this->telemetry->event('ollama.outcome', ['operation' => $operation, 'outcome' => 'invalid_schema', 'reason' => $reason], 'warning');
 
         throw OllamaException::invalidSchema($reason);
     }

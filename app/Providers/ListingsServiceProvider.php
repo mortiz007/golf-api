@@ -17,6 +17,7 @@ use App\Listings\Infrastructure\Llm\OllamaPromptBuilder;
 use App\Listings\Infrastructure\Llm\OllamaResponseMapper;
 use App\Listings\Infrastructure\Repositories\EloquentListingQueryRepository;
 use App\Listings\Infrastructure\Repositories\EloquentListingRepository;
+use App\Support\Telemetry;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -59,6 +60,7 @@ final class ListingsServiceProvider extends ServiceProvider
             keepAlive: (string) config('llm.ollama.keep_alive'),
             prompts: $app->make(OllamaPromptBuilder::class),
             mapper: $app->make(OllamaResponseMapper::class),
+            telemetry: $app->make(Telemetry::class),
         ));
     }
 

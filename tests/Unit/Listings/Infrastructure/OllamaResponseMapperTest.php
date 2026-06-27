@@ -5,12 +5,19 @@ declare(strict_types=1);
 use App\Listings\Domain\ValueObjects\ModerationStatus;
 use App\Listings\Infrastructure\Llm\OllamaException;
 use App\Listings\Infrastructure\Llm\OllamaResponseMapper;
+use App\Support\Telemetry;
+use Psr\Log\NullLogger;
 use Tests\TestCase;
 
 uses(TestCase::class);
 
+function makeOllamaResponseMapper(): OllamaResponseMapper
+{
+    return new OllamaResponseMapper(new Telemetry(new NullLogger));
+}
+
 it('maps a valid approved moderation payload to the normative result', function () {
-    $result = (new OllamaResponseMapper)->toModerationResult([
+    $result = makeOllamaResponseMapper()->toModerationResult([
         'status' => 'approved',
         'labels' => [],
         'scores' => ['spam' => 0.01, 'scam' => 0.02],
@@ -25,7 +32,7 @@ it('maps a valid approved moderation payload to the normative result', function 
 });
 
 it('maps a valid rejected moderation payload to the normative result', function () {
-    $result = (new OllamaResponseMapper)->toModerationResult([
+    $result = makeOllamaResponseMapper()->toModerationResult([
         'status' => 'rejected',
         'labels' => ['scam'],
         'scores' => ['scam' => 0.95],
@@ -37,7 +44,7 @@ it('maps a valid rejected moderation payload to the normative result', function 
 });
 
 it('maps a valid enrichment payload and forces currency to USD', function () {
-    $result = (new OllamaResponseMapper)->toEnrichmentResult([
+    $result = makeOllamaResponseMapper()->toEnrichmentResult([
         'model_evaluation' => [
             'summary' => 'A used driver in fair condition.',
             'features' => ['condition: Used'],
@@ -60,7 +67,7 @@ it('maps a valid enrichment payload and forces currency to USD', function () {
 });
 
 it('throws when moderation status is outside approved|rejected', function () {
-    (new OllamaResponseMapper)->toModerationResult([
+    makeOllamaResponseMapper()->toModerationResult([
         'status' => 'pending',
         'labels' => [],
         'scores' => [],
@@ -69,7 +76,7 @@ it('throws when moderation status is outside approved|rejected', function () {
 })->throws(OllamaException::class);
 
 it('throws when enrichment is missing estimated_market_value', function () {
-    (new OllamaResponseMapper)->toEnrichmentResult([
+    makeOllamaResponseMapper()->toEnrichmentResult([
         'model_evaluation' => [
             'summary' => 'x',
             'features' => [],
@@ -79,7 +86,7 @@ it('throws when enrichment is missing estimated_market_value', function () {
 })->throws(OllamaException::class);
 
 it('throws when an estimated market value field has an invalid type', function () {
-    (new OllamaResponseMapper)->toEnrichmentResult([
+    makeOllamaResponseMapper()->toEnrichmentResult([
         'model_evaluation' => [
             'summary' => 'x',
             'features' => [],

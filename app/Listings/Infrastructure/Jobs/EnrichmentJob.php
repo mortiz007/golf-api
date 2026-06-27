@@ -7,6 +7,7 @@ namespace App\Listings\Infrastructure\Jobs;
 use App\Listings\Application\UseCases\EnrichListingUseCase;
 use App\Listings\Domain\Contracts\ListingRepositoryPort;
 use App\Listings\Domain\ValueObjects\AiEnrichmentStatus;
+use App\Support\Telemetry;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Bus\Queueable;
@@ -49,9 +50,33 @@ final class EnrichmentJob implements ShouldQueue
         return [5, 15, 30];
     }
 
-    public function handle(EnrichListingUseCase $useCase): void
+    public function handle(EnrichListingUseCase $useCase, Telemetry $telemetry): void
     {
-        $useCase->execute($this->listingId);
+        $startedAt = microtime(true);
+
+        $telemetry->event('job.start', [
+            'job' => 'enrichment',
+            'listing_id' => $this->listingId,
+            'attempt' => $this->attempts(),
+        ]);
+
+        $outcome = 'success';
+
+        try {
+            $useCase->execute($this->listingId);
+        } catch (Throwable $exception) {
+            $outcome = 'error';
+
+            throw $exception;
+        } finally {
+            $telemetry->event('job.outcome', [
+                'job' => 'enrichment',
+                'listing_id' => $this->listingId,
+                'attempt' => $this->attempts(),
+                'outcome' => $outcome,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+        }
     }
 
     /**
@@ -60,6 +85,13 @@ final class EnrichmentJob implements ShouldQueue
      */
     public function failed(Throwable $exception): void
     {
+        app(Telemetry::class)->event('job.failed', [
+            'job' => 'enrichment',
+            'listing_id' => $this->listingId,
+            'attempt' => $this->attempts(),
+            'outcome' => 'failed',
+        ], 'warning');
+
         app(ListingRepositoryPort::class)->updateEnrichment(
             $this->listingId,
             [

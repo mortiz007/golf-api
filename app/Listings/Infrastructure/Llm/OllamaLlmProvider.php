@@ -9,10 +9,10 @@ use App\Listings\Domain\Llm\EnrichmentInput;
 use App\Listings\Domain\Llm\EnrichmentResult;
 use App\Listings\Domain\Llm\ModerationInput;
 use App\Listings\Domain\Llm\ModerationResult;
+use App\Support\Telemetry;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Real LLM adapter backed by a local Ollama server (POST /api/chat).
@@ -36,6 +36,7 @@ final class OllamaLlmProvider implements LlmPort
         private readonly string $keepAlive,
         private readonly OllamaPromptBuilder $prompts,
         private readonly OllamaResponseMapper $mapper,
+        private readonly Telemetry $telemetry,
     ) {}
 
     public function moderate(ModerationInput $input): ModerationResult
@@ -63,7 +64,7 @@ final class OllamaLlmProvider implements LlmPort
     {
         $endpoint = rtrim($this->baseUrl, '/').'/api/chat';
 
-        Log::info('ollama.request', [
+        $this->telemetry->event('ollama.request', [
             'operation' => $operation,
             'endpoint' => $endpoint,
             'model' => $this->model,
@@ -83,12 +84,12 @@ final class OllamaLlmProvider implements LlmPort
                 ])
                 ->throw();
         } catch (ConnectionException $e) {
-            Log::warning('ollama.outcome', ['operation' => $operation, 'outcome' => 'connection_error']);
+            $this->telemetry->event('ollama.outcome', ['operation' => $operation, 'outcome' => 'connection_error'], 'warning');
 
             throw OllamaException::connection($e);
         } catch (RequestException $e) {
             $status = $e->response->status();
-            Log::warning('ollama.outcome', ['operation' => $operation, 'outcome' => 'http_error', 'status' => $status]);
+            $this->telemetry->event('ollama.outcome', ['operation' => $operation, 'outcome' => 'http_error', 'status' => $status], 'warning');
 
             throw OllamaException::httpStatus($status);
         }
@@ -97,12 +98,12 @@ final class OllamaLlmProvider implements LlmPort
         $decoded = json_decode($content, true);
 
         if (! is_array($decoded)) {
-            Log::warning('ollama.outcome', ['operation' => $operation, 'outcome' => 'invalid_json']);
+            $this->telemetry->event('ollama.outcome', ['operation' => $operation, 'outcome' => 'invalid_json'], 'warning');
 
             throw OllamaException::invalidJson();
         }
 
-        Log::info('ollama.outcome', ['operation' => $operation, 'outcome' => 'success']);
+        $this->telemetry->event('ollama.outcome', ['operation' => $operation, 'outcome' => 'success']);
 
         return $decoded;
     }

@@ -11,8 +11,10 @@ use App\Listings\Infrastructure\Llm\OllamaException;
 use App\Listings\Infrastructure\Llm\OllamaLlmProvider;
 use App\Listings\Infrastructure\Llm\OllamaPromptBuilder;
 use App\Listings\Infrastructure\Llm\OllamaResponseMapper;
+use App\Support\Telemetry;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Psr\Log\NullLogger;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -22,6 +24,8 @@ uses(TestCase::class);
  */
 function makeOllamaProvider(): OllamaLlmProvider
 {
+    $telemetry = new Telemetry(new NullLogger);
+
     return new OllamaLlmProvider(
         baseUrl: 'http://localhost:11434',
         model: 'qwen2.5-coder:7b',
@@ -29,7 +33,8 @@ function makeOllamaProvider(): OllamaLlmProvider
         temperature: 0.1,
         keepAlive: '5m',
         prompts: new OllamaPromptBuilder,
-        mapper: new OllamaResponseMapper,
+        mapper: new OllamaResponseMapper($telemetry),
+        telemetry: $telemetry,
     );
 }
 

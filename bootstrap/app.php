@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\LogHttpTelemetry;
 use App\Listings\Domain\Exceptions\InvalidListingDataException;
 use App\Listings\Domain\Exceptions\ListingAccessDeniedException;
 use App\Listings\Domain\Exceptions\ListingNotFoundException;
@@ -19,7 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Operational telemetry at the HTTP boundary (DESIGN §9): one
+        // http.request + one http.outcome event per API request.
+        $middleware->appendToGroup('api', LogHttpTelemetry::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Map domain exceptions to the normative error envelope (DESIGN §VI)
