@@ -9,6 +9,8 @@ use App\Listings\Domain\ValueObjects\ModerationStatus;
 use App\Listings\Infrastructure\Llm\LlmProviderMock;
 use App\Listings\Infrastructure\Llm\OllamaException;
 use App\Listings\Infrastructure\Llm\OllamaLlmProvider;
+use App\Listings\Infrastructure\Llm\OllamaPromptBuilder;
+use App\Listings\Infrastructure\Llm\OllamaResponseMapper;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -26,6 +28,8 @@ function makeOllamaProvider(): OllamaLlmProvider
         timeout: 60,
         temperature: 0.1,
         keepAlive: '5m',
+        prompts: new OllamaPromptBuilder,
+        mapper: new OllamaResponseMapper,
     );
 }
 

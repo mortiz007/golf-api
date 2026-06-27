@@ -13,6 +13,8 @@ use App\Listings\Infrastructure\Dispatchers\LaravelListingProcessingDispatcher;
 use App\Listings\Infrastructure\Events\LaravelDomainEventPublisher;
 use App\Listings\Infrastructure\Llm\LlmProviderMock;
 use App\Listings\Infrastructure\Llm\OllamaLlmProvider;
+use App\Listings\Infrastructure\Llm\OllamaPromptBuilder;
+use App\Listings\Infrastructure\Llm\OllamaResponseMapper;
 use App\Listings\Infrastructure\Repositories\EloquentListingQueryRepository;
 use App\Listings\Infrastructure\Repositories\EloquentListingRepository;
 use Illuminate\Support\ServiceProvider;
@@ -47,13 +49,16 @@ final class ListingsServiceProvider extends ServiceProvider
         });
 
         // OllamaLlmProvider needs its settings injected from config; the generic
-        // LlmPort binding above resolves this explicit binding via make().
-        $this->app->bind(OllamaLlmProvider::class, fn (): OllamaLlmProvider => new OllamaLlmProvider(
+        // LlmPort binding above resolves this explicit binding via make(). Its
+        // prompt builder and response mapper collaborators are autowired.
+        $this->app->bind(OllamaLlmProvider::class, fn ($app): OllamaLlmProvider => new OllamaLlmProvider(
             baseUrl: (string) config('llm.ollama.base_url'),
             model: (string) config('llm.ollama.model'),
             timeout: (int) config('llm.ollama.timeout'),
             temperature: (float) config('llm.ollama.temperature'),
             keepAlive: (string) config('llm.ollama.keep_alive'),
+            prompts: $app->make(OllamaPromptBuilder::class),
+            mapper: $app->make(OllamaResponseMapper::class),
         ));
     }
 
