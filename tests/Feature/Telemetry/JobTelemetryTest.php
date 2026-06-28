@@ -83,5 +83,19 @@ it('emits job.failed on definitive moderation failure', function () {
     expect($failed)->toHaveCount(1)
         ->and($failed[0]['level'])->toBe('warning')
         ->and($failed[0]['context']['job'])->toBe('moderation')
-        ->and($failed[0]['context']['outcome'])->toBe('failed');
+        ->and($failed[0]['context']['outcome'])->toBe('failed')
+        ->and($failed[0]['context']['exception'])->toBe(RuntimeException::class);
+});
+
+it('emits job.skipped when the listing no longer exists', function () {
+    $logger = captureJobTelemetry();
+
+    ModerationJob::dispatchSync(999999);
+
+    $skipped = $logger->eventsNamed('job.skipped');
+
+    expect($skipped)->toHaveCount(1)
+        ->and($skipped[0]['context']['job'])->toBe('moderation')
+        ->and($skipped[0]['context']['listing_id'])->toBe(999999)
+        ->and($skipped[0]['context']['reason'])->toBe('listing_not_found');
 });

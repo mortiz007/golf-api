@@ -10,6 +10,7 @@ use App\Listings\Domain\Llm\ModerationResult;
 use App\Listings\Infrastructure\Eloquent\ListingModel;
 use App\Listings\Infrastructure\Jobs\EnrichmentJob;
 use App\Listings\Infrastructure\Jobs\ModerationJob;
+use App\Listings\Infrastructure\Llm\OllamaException;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -121,4 +122,48 @@ it('lets the configured LlmPort adapter be swapped', function () {
     EnrichmentJob::dispatchSync($id);
 
     expect(ListingModel::find($id)->ai_enrichment['model'])->toBe('custom-adapter');
+});
+
+it('sends a permanent LLM failure straight to the fallback without retrying', function () {
+    $id = seedPendingListing();
+
+    $this->app->bind(LlmPort::class, fn () => new class implements LlmPort
+    {
+        public function moderate(ModerationInput $input): ModerationResult
+        {
+            throw OllamaException::invalidSchema('status missing');
+        }
+
+        public function enrich(EnrichmentInput $input): EnrichmentResult
+        {
+            throw new RuntimeException('not used');
+        }
+    });
+
+    // A non-retryable failure must not bubble out of the job: it is failed
+    // immediately and the pending fallback is recorded.
+    ModerationJob::dispatchSync($id);
+
+    $listing = ListingModel::find($id);
+    expect($listing->moderation_status)->toBe('pending')
+        ->and($listing->moderation_result['error'])->toContain('schema validation');
+});
+
+it('rethrows a transient LLM failure so the queue can retry it', function () {
+    $id = seedPendingListing();
+
+    $this->app->bind(LlmPort::class, fn () => new class implements LlmPort
+    {
+        public function moderate(ModerationInput $input): ModerationResult
+        {
+            throw OllamaException::connection(new RuntimeException('connection refused'));
+        }
+
+        public function enrich(EnrichmentInput $input): EnrichmentResult
+        {
+            throw new RuntimeException('not used');
+        }
+    });
+
+    expect(fn () => ModerationJob::dispatchSync($id))->toThrow(OllamaException::class);
 });

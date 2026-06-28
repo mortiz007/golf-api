@@ -133,7 +133,13 @@ Todas las respuestas de error usan el formato uniforme:
 | `FORBIDDEN`        | 403  | No es propietario del listing.        |
 | `NOT_FOUND`        | 404  | Listing inexistente o cancelado.      |
 | `RATE_LIMITED`     | 429  | Excede 60 req/min por usuario.        |
-| `INTERNAL_ERROR`   | 500  | Error no controlado.                  |
+| `INTERNAL_ERROR`   | 500  | Throwable no controlado (catch-all).  |
+
+**Mapeo centralizado en `bootstrap/app.php`:**
+
+- Cada excepción esperada (dominio, autenticación, throttling) se mapea con un `render` callback al envelope. Un `render` catch-all final convierte cualquier `Throwable` restante en `INTERNAL_ERROR` 500, **excluyendo** `HttpResponseException` y `HttpExceptionInterface` (FormRequest 422, 404/405 de ruta) para que conserven su propio status. El catch-all nunca filtra el mensaje ni el trace interno.
+- **Detección JSON por path:** los handlers responden con el envelope cuando `expectsJson()` **o** `is('api/*')`, de modo que un cliente que omite `Accept: application/json` igual recibe JSON. Complementado con `shouldRenderJsonWhen` y, en el middleware, `redirectGuestsTo(null)` (app solo-API: nunca redirige a una ruta `login` inexistente; un 401 sin `Accept` devuelve el envelope `UNAUTHENTICATED` en vez de un 500 latente).
+- **Reporte:** las excepciones de dominio (`ListingDomainException` y subclases) se excluyen del log vía `dontReport()` por ser flujo de control esperado. Un `report` callback emite además `error.unhandled` al pipeline `stdout` (§9.2) para los `Throwable` que sí se reportan (500 HTTP y fallos definitivos de jobs).
 
 ### 3.2 `POST /api/listings` — Crear (protegido)
 
@@ -504,10 +510,12 @@ Al crear o actualizar se encolan **dos jobs independientes y paralelos** en la m
 
 - `QUEUE_CONNECTION=database`.
 - **3 reintentos** con backoff exponencial: **5s, 15s, 30s** (`$tries = 3`, `backoff() = [5, 15, 30]`).
-- **Fallback tras agotar reintentos** (`failed()` del job):
+- **Clasificación de fallos del LLM:** `OllamaException` expone `isRetryable()`. Los fallos **transitorios** (error de conexión, HTTP 5xx) se relanzan y consumen el ciclo de reintentos. Los fallos **permanentes** (HTTP 4xx, JSON inválido, schema inválido) no pueden tener éxito al reintentar: el job llama `$this->fail($e)` de inmediato y salta directo a la DLQ, evitando el backoff inútil.
+- **Fallback tras fallo definitivo** (`failed()` del job):
   - Moderación fallida → `moderation_status=pending` (no visible públicamente).
   - Enrichment fallido → `ai_enrichment_status=failed`.
   - El error se registra en la columna JSON correspondiente; el job va a `failed_jobs` (DLQ).
+  - La persistencia del fallback se envuelve en try/catch; si ella misma falla, se emite `job.fallback_failed` (§9.2) para que la pérdida no quede silenciosa.
 
 ### 8.4 Mock LLM determinista
 
@@ -550,10 +558,11 @@ Telemetría operacional para observabilidad, **independiente del bounded context
 | Frontera                          | Implementación                                  | Eventos                                       | Campos de `context`                                              |
 | --------------------------------- | ----------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------- |
 | HTTP (controladores)              | Middleware terminable `LogHttpTelemetry` (grupo `api`) | `http.request`, `http.outcome`         | `method`, `path`, `status`, `duration_ms`, `user_id`            |
-| Jobs LLM                          | `ModerationJob`, `EnrichmentJob`                | `job.start`, `job.outcome`, `job.failed`      | `job`, `listing_id`, `attempt`, `outcome`, `duration_ms`        |
-| Listener de auditoría (async)     | `RecordAuditLogListener`                         | `job.start`, `job.outcome`, `job.failed`      | `job` (=`audit_log`), `action`, `listing_id`, `event_id`, `attempt`, `outcome`, `duration_ms` |
+| Excepciones no controladas        | `report` callback en `bootstrap/app.php`        | `error.unhandled`                             | `exception` (clase), `message`                                  |
+| Jobs LLM                          | `ModerationJob`, `EnrichmentJob`                | `job.start`, `job.outcome`, `job.skipped`, `job.failed`, `job.fallback_failed` | `job`, `listing_id`, `attempt`, `outcome`, `duration_ms`, `exception`, `reason` |
+| Listener de auditoría (async)     | `RecordAuditLogListener`                         | `job.start`, `job.outcome`, `job.failed`      | `job` (=`audit_log`), `action`, `listing_id`, `event_id`, `attempt`, `outcome`, `duration_ms`, `exception` |
 | Adaptador LLM                     | `OllamaLlmProvider`, `OllamaResponseMapper`     | `ollama.request`, `ollama.outcome`            | `operation`, `endpoint`, `model`, `outcome`, `status`, `reason` |
 
-`http.outcome` se emite en `terminate()` para capturar el status final incluso de respuestas de error renderizadas en `bootstrap/app.php`. Los `job.outcome` distinguen `success`/`error`; `job.failed` (nivel `warning`) se emite al agotar reintentos (DLQ) sin alterar el fallback de negocio existente.
+`http.outcome` se emite en `terminate()` para capturar el status final incluso de respuestas de error renderizadas en `bootstrap/app.php`. Los `job.outcome` distinguen `success`/`error`; `job.failed` (nivel `warning`, incluye la clase de la `exception`) se emite al agotar reintentos o al fallar de forma definitiva (DLQ) sin alterar el fallback de negocio existente. `job.skipped` registra el no-op cuando el listing ya no existe entre el dispatch y la ejecución; `job.fallback_failed` (nivel `error`) señala que la persistencia del fallback también falló. `error.unhandled` (nivel `error`) lleva al pipeline `stdout` cualquier `Throwable` reportable (500 HTTP y fallos de jobs), de forma aditiva al log de archivo por defecto.
 
 **Privacidad.** Solo se registran identificadores y metadatos. Nunca contenido de usuario (`title`, `description`) ni datos sensibles (`email`, `password`, token), ni la query string (el middleware registra `path` sin querystring para no filtrar el parámetro `q`).

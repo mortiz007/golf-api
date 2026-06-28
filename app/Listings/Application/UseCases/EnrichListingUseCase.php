@@ -15,7 +15,7 @@ use App\Listings\Domain\ValueObjects\AiEnrichmentStatus;
  * Independent of moderation (DESIGN §V): does not read the moderation result.
  *
  * Flow:
- *   1. Load the listing (skip silently if it no longer exists).
+ *   1. Load the listing (skip if it no longer exists).
  *   2. Generate the evaluation + estimated market value via LlmPort.
  *   3. Persist ai_enrichment + ai_enrichment_status = succeeded.
  *
@@ -29,12 +29,16 @@ final class EnrichListingUseCase
         private readonly LlmPort $llm,
     ) {}
 
-    public function execute(int $listingId): void
+    /**
+     * @return bool true if the listing was processed, false if it no longer
+     *              exists and the work was skipped.
+     */
+    public function execute(int $listingId): bool
     {
         $listing = $this->repository->findById($listingId);
 
         if ($listing === null) {
-            return;
+            return false;
         }
 
         $result = $this->llm->enrich(new EnrichmentInput(
@@ -49,5 +53,7 @@ final class EnrichListingUseCase
             $result->toArray(),
             AiEnrichmentStatus::SUCCEEDED,
         );
+
+        return true;
     }
 }

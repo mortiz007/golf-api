@@ -7,6 +7,7 @@ namespace App\Listings\Infrastructure\Jobs;
 use App\Listings\Application\UseCases\EnrichListingUseCase;
 use App\Listings\Domain\Contracts\ListingRepositoryPort;
 use App\Listings\Domain\ValueObjects\AiEnrichmentStatus;
+use App\Listings\Infrastructure\Llm\OllamaException;
 use App\Support\Telemetry;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -63,7 +64,28 @@ final class EnrichmentJob implements ShouldQueue
         $outcome = 'success';
 
         try {
-            $useCase->execute($this->listingId);
+            if (! $useCase->execute($this->listingId)) {
+                // The listing disappeared between dispatch and execution; record
+                // the skip so the no-op is observable rather than silent.
+                $telemetry->event('job.skipped', [
+                    'job' => 'enrichment',
+                    'listing_id' => $this->listingId,
+                    'reason' => 'listing_not_found',
+                ]);
+            }
+        } catch (OllamaException $exception) {
+            $outcome = 'error';
+
+            // Permanent contract violations cannot succeed on retry: fail
+            // immediately so the job goes straight to the DLQ and the fallback
+            // runs, instead of burning the full backoff cycle.
+            if (! $exception->isRetryable()) {
+                $this->fail($exception);
+
+                return;
+            }
+
+            throw $exception;
         } catch (Throwable $exception) {
             $outcome = 'error';
 
@@ -90,15 +112,26 @@ final class EnrichmentJob implements ShouldQueue
             'listing_id' => $this->listingId,
             'attempt' => $this->attempts(),
             'outcome' => 'failed',
+            'exception' => $exception::class,
         ], 'warning');
 
-        app(ListingRepositoryPort::class)->updateEnrichment(
-            $this->listingId,
-            [
-                'error' => $exception->getMessage(),
-                'failed_at' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z'),
-            ],
-            AiEnrichmentStatus::FAILED,
-        );
+        try {
+            app(ListingRepositoryPort::class)->updateEnrichment(
+                $this->listingId,
+                [
+                    'error' => $exception->getMessage(),
+                    'failed_at' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z'),
+                ],
+                AiEnrichmentStatus::FAILED,
+            );
+        } catch (Throwable $fallbackException) {
+            // The fallback persistence itself failed (e.g. DB unavailable). Surface
+            // it on the telemetry pipeline so the silent loss is observable.
+            app(Telemetry::class)->event('job.fallback_failed', [
+                'job' => 'enrichment',
+                'listing_id' => $this->listingId,
+                'exception' => $fallbackException::class,
+            ], 'error');
+        }
     }
 }

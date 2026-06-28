@@ -108,6 +108,7 @@ final class RecordAuditLogListener implements ShouldQueue
             'listing_id' => $event->listingId,
             'event_id' => $event->eventId,
             'outcome' => 'failed',
+            'exception' => $exception::class,
         ], 'warning');
     }
 }

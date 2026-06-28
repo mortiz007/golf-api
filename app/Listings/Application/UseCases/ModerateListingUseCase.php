@@ -12,7 +12,7 @@ use App\Listings\Domain\Llm\ModerationInput;
  * Moderates a listing (SPECS §6 / DESIGN §V.1), invoked by ModerationJob.
  *
  * Flow:
- *   1. Load the listing (skip silently if it no longer exists).
+ *   1. Load the listing (skip if it no longer exists).
  *   2. Classify its content via LlmPort.
  *   3. Persist moderation_result + the resolved moderation_status.
  *
@@ -26,12 +26,16 @@ final class ModerateListingUseCase
         private readonly LlmPort $llm,
     ) {}
 
-    public function execute(int $listingId): void
+    /**
+     * @return bool true if the listing was processed, false if it no longer
+     *              exists and the work was skipped.
+     */
+    public function execute(int $listingId): bool
     {
         $listing = $this->repository->findById($listingId);
 
         if ($listing === null) {
-            return;
+            return false;
         }
 
         $result = $this->llm->moderate(new ModerationInput(
@@ -44,5 +48,7 @@ final class ModerateListingUseCase
             $result->toArray(),
             $result->status,
         );
+
+        return true;
     }
 }
