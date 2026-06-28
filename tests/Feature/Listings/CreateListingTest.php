@@ -48,7 +48,7 @@ it('creates a listing and returns 201 with a Location header', function () {
 
     $categoryId = seedCategory();
 
-    $response = $this->postJson('/api/listings', validListingPayload($categoryId));
+    $response = $this->postJson('/api/v1/listings', validListingPayload($categoryId));
 
     $response->assertCreated()
         ->assertJsonPath('title', 'Driver Pro')
@@ -58,7 +58,7 @@ it('creates a listing and returns 201 with a Location header', function () {
         ->assertJsonPath('user.name', $user->name);
 
     $id = $response->json('id');
-    $response->assertHeader('Location', "/api/listings/{$id}");
+    $response->assertHeader('Location', "/api/v1/listings/{$id}");
 
     $this->assertDatabaseHas('listings', [
         'id' => $id,
@@ -77,7 +77,7 @@ it('enqueues moderation and enrichment jobs and dispatches the domain event', fu
     Sanctum::actingAs(User::factory()->create());
     $categoryId = seedCategory();
 
-    $this->postJson('/api/listings', validListingPayload($categoryId))->assertCreated();
+    $this->postJson('/api/v1/listings', validListingPayload($categoryId))->assertCreated();
 
     Queue::assertPushed(ModerationJob::class);
     Queue::assertPushed(EnrichmentJob::class);
@@ -87,7 +87,7 @@ it('enqueues moderation and enrichment jobs and dispatches the domain event', fu
 it('returns 422 with the normative error envelope on invalid data', function () {
     Sanctum::actingAs(User::factory()->create());
 
-    $response = $this->postJson('/api/listings', [
+    $response = $this->postJson('/api/v1/listings', [
         'title' => 'Driver 3000',   // digits not allowed
         'price' => 0,               // below minimum 0.01
         'condition' => 'Broken',     // not an allowed condition
@@ -105,6 +105,6 @@ it('returns 422 with the normative error envelope on invalid data', function () 
 it('returns 401 when no token is provided', function () {
     $categoryId = seedCategory();
 
-    $this->postJson('/api/listings', validListingPayload($categoryId))
+    $this->postJson('/api/v1/listings', validListingPayload($categoryId))
         ->assertUnauthorized();
 });

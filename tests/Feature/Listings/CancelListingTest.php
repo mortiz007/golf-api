@@ -42,7 +42,7 @@ it('soft-deletes the listing, returns 204 and publishes ListingDeleted', functio
     $categoryId = seedCategoryForCancel();
     $id = seedListingForCancel($user->id, $categoryId);
 
-    $this->deleteJson("/api/listings/{$id}")->assertNoContent();
+    $this->deleteJson("/api/v1/listings/{$id}")->assertNoContent();
 
     $listing = ListingModel::find($id);
     expect($listing->cancelled_at)->not->toBeNull();
@@ -58,7 +58,7 @@ it('records a single deleted audit log when cancelling', function () {
     $categoryId = seedCategoryForCancel();
     $id = seedListingForCancel($user->id, $categoryId);
 
-    $this->deleteJson("/api/listings/{$id}")->assertNoContent();
+    $this->deleteJson("/api/v1/listings/{$id}")->assertNoContent();
 
     $this->assertDatabaseCount('listing_audit_logs', 1);
     $this->assertDatabaseHas('listing_audit_logs', [
@@ -76,8 +76,8 @@ it('is idempotent: cancelling an already-cancelled listing stays 204 without dup
     $categoryId = seedCategoryForCancel();
     $id = seedListingForCancel($user->id, $categoryId);
 
-    $this->deleteJson("/api/listings/{$id}")->assertNoContent();
-    $this->deleteJson("/api/listings/{$id}")->assertNoContent();
+    $this->deleteJson("/api/v1/listings/{$id}")->assertNoContent();
+    $this->deleteJson("/api/v1/listings/{$id}")->assertNoContent();
 
     $this->assertDatabaseCount('listing_audit_logs', 1);
 });
@@ -89,7 +89,7 @@ it('returns 403 when the actor is not the owner', function () {
 
     Sanctum::actingAs(User::factory()->create());
 
-    $this->deleteJson("/api/listings/{$id}")
+    $this->deleteJson("/api/v1/listings/{$id}")
         ->assertForbidden()
         ->assertJsonPath('error.code', 'FORBIDDEN');
 
@@ -102,7 +102,7 @@ it('returns 403 when the actor is not the owner', function () {
 it('returns 404 when the listing does not exist', function () {
     Sanctum::actingAs(User::factory()->create());
 
-    $this->deleteJson('/api/listings/999999')
+    $this->deleteJson('/api/v1/listings/999999')
         ->assertNotFound()
         ->assertJsonPath('error.code', 'NOT_FOUND');
 });
@@ -112,5 +112,5 @@ it('returns 401 when no token is provided', function () {
     $categoryId = seedCategoryForCancel();
     $id = seedListingForCancel($owner->id, $categoryId);
 
-    $this->deleteJson("/api/listings/{$id}")->assertUnauthorized();
+    $this->deleteJson("/api/v1/listings/{$id}")->assertUnauthorized();
 });

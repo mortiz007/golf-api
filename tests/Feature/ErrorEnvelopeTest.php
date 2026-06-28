@@ -12,7 +12,7 @@ use Tests\Support\CapturingLogger;
 uses(RefreshDatabase::class);
 
 it('returns the normative envelope with UNAUTHENTICATED on a 401', function () {
-    $this->getJson('/api/audit-logs')
+    $this->getJson('/api/v1/audit-logs')
         ->assertUnauthorized()
         ->assertJsonPath('error.code', 'UNAUTHENTICATED')
         ->assertJsonStructure([
@@ -24,10 +24,10 @@ it('returns the normative envelope with RATE_LIMITED and headers on a 429', func
     Sanctum::actingAs(User::factory()->create());
 
     for ($i = 0; $i < 60; $i++) {
-        $this->getJson('/api/audit-logs')->assertOk();
+        $this->getJson('/api/v1/audit-logs')->assertOk();
     }
 
-    $this->getJson('/api/audit-logs')
+    $this->getJson('/api/v1/audit-logs')
         ->assertStatus(429)
         ->assertHeader('Retry-After')
         ->assertJsonPath('error.code', 'RATE_LIMITED')
@@ -37,11 +37,11 @@ it('returns the normative envelope with RATE_LIMITED and headers on a 429', func
 });
 
 it('maps an unhandled exception on an api route to the INTERNAL_ERROR envelope', function () {
-    Route::get('/api/_boom', function (): void {
+    Route::get('/api/v1/_boom', function (): void {
         throw new RuntimeException('kaboom');
     });
 
-    $this->getJson('/api/_boom')
+    $this->getJson('/api/v1/_boom')
         ->assertStatus(500)
         ->assertJsonPath('error.code', 'INTERNAL_ERROR')
         ->assertJsonStructure([
@@ -50,11 +50,11 @@ it('maps an unhandled exception on an api route to the INTERNAL_ERROR envelope',
 });
 
 it('does not leak the internal exception message in the INTERNAL_ERROR envelope', function () {
-    Route::get('/api/_boom', function (): void {
+    Route::get('/api/v1/_boom', function (): void {
         throw new RuntimeException('super secret internal detail');
     });
 
-    $this->getJson('/api/_boom')
+    $this->getJson('/api/v1/_boom')
         ->assertStatus(500)
         ->assertJsonPath('error.message', 'An unexpected error occurred.')
         ->assertDontSee('super secret internal detail');
@@ -64,11 +64,11 @@ it('emits error.unhandled telemetry for an unhandled exception', function () {
     $logger = new CapturingLogger;
     app()->instance(Telemetry::class, new Telemetry($logger));
 
-    Route::get('/api/_boom', function (): void {
+    Route::get('/api/v1/_boom', function (): void {
         throw new RuntimeException('kaboom');
     });
 
-    $this->getJson('/api/_boom')->assertStatus(500);
+    $this->getJson('/api/v1/_boom')->assertStatus(500);
 
     $events = $logger->eventsNamed('error.unhandled');
 
@@ -83,7 +83,7 @@ it('does not report an expected domain exception as an unhandled error', functio
 
     Sanctum::actingAs(User::factory()->create());
 
-    $this->patchJson('/api/listings/999999', ['title' => 'New Title'])
+    $this->patchJson('/api/v1/listings/999999', ['title' => 'New Title'])
         ->assertStatus(404)
         ->assertJsonPath('error.code', 'NOT_FOUND');
 
@@ -91,7 +91,7 @@ it('does not report an expected domain exception as an unhandled error', functio
 });
 
 it('returns the JSON envelope on api routes even without an Accept header', function () {
-    $this->get('/api/audit-logs')
+    $this->get('/api/v1/audit-logs')
         ->assertStatus(401)
         ->assertJsonPath('error.code', 'UNAUTHENTICATED');
 });

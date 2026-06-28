@@ -37,7 +37,7 @@ it('returns only the authenticated user\'s audit logs', function () {
 
     Sanctum::actingAs($userA);
 
-    $response = $this->getJson('/api/audit-logs');
+    $response = $this->getJson('/api/v1/audit-logs');
 
     $response->assertOk()
         ->assertJsonCount(2, 'data')
@@ -58,7 +58,7 @@ it('orders audit logs by created_at descending', function () {
 
     Sanctum::actingAs($user);
 
-    $response = $this->getJson('/api/audit-logs')->assertOk();
+    $response = $this->getJson('/api/v1/audit-logs')->assertOk();
 
     expect($response->json('data.0.message'))->toBe('newest')
         ->and($response->json('data.1.message'))->toBe('middle')
@@ -74,14 +74,14 @@ it('paginates audit logs at 20 per page', function () {
 
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/audit-logs')
+    $this->getJson('/api/v1/audit-logs')
         ->assertOk()
         ->assertJsonCount(20, 'data')
         ->assertJsonPath('meta.total', 25)
         ->assertJsonPath('meta.last_page', 2)
         ->assertJsonPath('meta.current_page', 1);
 
-    $this->getJson('/api/audit-logs?page=2')
+    $this->getJson('/api/v1/audit-logs?page=2')
         ->assertOk()
         ->assertJsonCount(5, 'data')
         ->assertJsonPath('meta.current_page', 2);
@@ -93,7 +93,7 @@ it('exposes only the contract fields for each entry', function () {
 
     Sanctum::actingAs($user);
 
-    $this->getJson('/api/audit-logs')
+    $this->getJson('/api/v1/audit-logs')
         ->assertOk()
         ->assertJsonStructure([
             'data' => [
@@ -105,5 +105,5 @@ it('exposes only the contract fields for each entry', function () {
 });
 
 it('returns 401 when no token is provided', function () {
-    $this->getJson('/api/audit-logs')->assertUnauthorized();
+    $this->getJson('/api/v1/audit-logs')->assertUnauthorized();
 });

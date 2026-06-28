@@ -67,7 +67,7 @@ php artisan serve                 # http://127.0.0.1:8000
 php artisan queue:work            # or: php artisan queue:listen --tries=1 (dev)
 ```
 
-CRITICAL: `QUEUE_CONNECTION=database`. Moderation, enrichment and audit-log writes are queued jobs/listeners. Without a running worker, `moderation_status`/`ai_enrichment_status` stay `pending` and `GET /api/audit-logs` returns an empty `data` array.
+CRITICAL: `QUEUE_CONNECTION=database`. Moderation, enrichment and audit-log writes are queued jobs/listeners. Without a running worker, `moderation_status`/`ai_enrichment_status` stay `pending` and `GET /api/v1/audit-logs` returns an empty `data` array.
 
 All-in-one dev (server + queue + vite):
 
@@ -100,7 +100,7 @@ Defined in `.env` (copy from `.env.example`). Key entries:
 ### Business
 | Variable                        | Default | Notes                                                       |
 | ------------------------------- | ------- | ----------------------------------------------------------- |
-| `LISTINGS_DAILY_CREATION_LIMIT` | `10`    | Per-user/day cap on `POST /api/listings` (`config/listings.php`). |
+| `LISTINGS_DAILY_CREATION_LIMIT` | `10`    | Per-user/day cap on `POST /api/v1/listings` (`config/listings.php`). |
 
 ### LLM provider (`config/llm.php`)
 | Variable            | Default                     | Notes                                                            |
@@ -223,9 +223,9 @@ IMPORTANT for any client/agent calling the API: always send `Accept: application
 
 ## 8. Endpoint Description  
 
-Base path `/api`. Authenticated routes (everything except `GET /api/listings`) apply `auth:sanctum` + `throttle:60,1`. Source: `routes/api.php`, the FormRequests, Use Cases and `EloquentListingQueryRepository`.
+Base path `/api/v1`. Authenticated routes (everything except `GET /api/v1/listings`) apply `auth:sanctum` + `throttle:60,1`. Source: `routes/api.php`, the FormRequests, Use Cases and `EloquentListingQueryRepository`.
 
-### `GET /api/listings` — public list (no auth)
+### `GET /api/v1/listings` — public list (no auth)
 - Query params (`ListListingsRequest`): `min_price` (numeric, min 0), `max_price` (numeric, min 0), `category_id` (integer, `exists:categories,id`), `condition` (`in:New,Used,Refurbished,Like New`), `q` (string, max 255), `show_all` (boolean), `page` (int, min 1), `per_page` (int, min 1, max 100). Invalid -> 422 envelope.
 - `q` does a `LIKE %term%` over `title` OR `description`.
 - Visibility (`show_all=false`, default): `moderation_status='approved'` AND `cancelled_at IS NULL` AND (`end_date IS NULL` OR `end_date >= today`); ordered `created_at ASC`.
@@ -234,26 +234,26 @@ Base path `/api`. Authenticated routes (everything except `GET /api/listings`) a
 - With the seed data, default visible total = 6 (listings 1,2,7,8,9,10). Hidden by default: pending (3), rejected (4), cancelled (5), expired (6).
 - Codes: 200, 422.
 
-### `POST /api/listings` — create (auth; owner is the caller)
+### `POST /api/v1/listings` — create (auth; owner is the caller)
 - Extra limiter: `throttle:listing-creation` = `LISTINGS_DAILY_CREATION_LIMIT` per user per day (429 when exceeded), on top of `throttle:60,1`.
 - Validation (`StoreListingRequest`): `title` required, `^[A-Za-z ]+$`, 3-255, trimmed; `price` required numeric `0.01..99999999.99`; `condition` required enum; `description` required 10-1000, `strip_tags`+trim; `end_date` optional `Y-m-d`, `after_or_equal:today`; `category_id` required `exists:categories,id`.
 - Behavior: persists with `moderation_status=pending`, `ai_enrichment_status=pending`; publishes `ListingCreated` after commit; queues `ModerationJob` + `EnrichmentJob`.
-- Response 201, flat body (no `data` wrapper): `id, title, price, condition, description, end_date, category_id, moderation_status, ai_enrichment_status, ai_enrichment(null), created_at, user{name}`. Header `Location: /api/listings/{id}`.
+- Response 201, flat body (no `data` wrapper): `id, title, price, condition, description, end_date, category_id, moderation_status, ai_enrichment_status, ai_enrichment(null), created_at, user{name}`. Header `Location: /api/v1/listings/{id}`.
 - Codes: 201, 422, 401, 429.
 
-### `PATCH /api/listings/{id}` — partial update (auth, owner-only)
+### `PATCH /api/v1/listings/{id}` — partial update (auth, owner-only)
 - Load order: missing OR cancelled listing -> 404 (`NOT_FOUND`); non-owner -> 403 (`FORBIDDEN`). Authorization is resolved in the Use Case (no Laravel Policy).
 - Only submitted fields change (`sometimes` rules, same constraints as create; `category_id` editable; `end_date` may be set to null).
 - Re-evaluation triggers (only when the value actually changes): `title` or `description` -> `moderation_status=pending` + re-queue `ModerationJob`; `price` or `condition` -> `ai_enrichment_status=pending` + re-queue `EnrichmentJob`; `category_id` alone triggers nothing.
 - Publishes `ListingUpdated` after commit. Response 200, same shape as POST (`user{name}`).
 - Codes: 200, 403, 404 (missing or cancelled), 422, 401, 429.
 
-### `DELETE /api/listings/{id}` — cancel / soft-delete (auth, owner-only)
+### `DELETE /api/v1/listings/{id}` — cancel / soft-delete (auth, owner-only)
 - Missing -> 404; non-owner -> 403 (authorization checked BEFORE idempotency). Sets `cancelled_at=now`, publishes `ListingDeleted` after commit.
 - Idempotent: deleting an already-cancelled listing returns 204 and does NOT re-persist or re-publish.
 - Response 204, no body. Codes: 204, 403, 404, 401, 429.
 
-### `GET /api/audit-logs` — current user's audit log (auth)
+### `GET /api/v1/audit-logs` — current user's audit log (auth)
 - Returns only the authenticated user's entries, `created_at DESC`, paginated 20/page (`data` + `meta` + `links`).
 - Item: `id, action(created|updated|deleted), message, metadata(payload snapshot), created_at`.
 - Requires a running queue worker for entries to exist (events are processed asynchronously).

@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\DB;
 final class ListingController extends Controller
 {
     /**
-     * GET /api/listings — public, paginated listing with filters (SPECS §4.4).
+     * GET /api/v1/listings — public, paginated listing with filters (SPECS §4.4).
      *
      * Visibility/ordering depend on show_all (#4, #5). Returns 200 paginated;
      * invalid query params yield a 422 envelope via the FormRequest.
@@ -45,7 +45,7 @@ final class ListingController extends Controller
     }
 
     /**
-     * POST /api/listings — create a listing (SPECS §4.1).
+     * POST /api/v1/listings — create a listing (SPECS §4.1).
      *
      * Persists with moderation_status/ai_enrichment_status = pending, publishes
      * ListingCreated after commit and enqueues moderation + enrichment jobs.
@@ -66,11 +66,11 @@ final class ListingController extends Controller
         return ListingResource::make($listing)
             ->response()
             ->setStatusCode(JsonResponse::HTTP_CREATED)
-            ->header('Location', "/api/listings/{$listing->id()}");
+            ->header('Location', "/api/v1/listings/{$listing->id()}");
     }
 
     /**
-     * PATCH /api/listings/{id} — partial update, owner-only (SPECS §4.2).
+     * PATCH /api/v1/listings/{id} — partial update, owner-only (SPECS §4.2).
      *
      * Applies only the submitted fields. Changing title/description re-queues
      * moderation; changing price/condition re-queues enrichment. Publishes
@@ -94,7 +94,7 @@ final class ListingController extends Controller
     }
 
     /**
-     * DELETE /api/listings/{id} — cancel (soft-delete), owner-only (SPECS §4.3).
+     * DELETE /api/v1/listings/{id} — cancel (soft-delete), owner-only (SPECS §4.3).
      *
      * Sets cancelled_at and publishes ListingDeleted after commit. Cancelling an
      * already-cancelled listing is idempotent (still 204, decision #15).

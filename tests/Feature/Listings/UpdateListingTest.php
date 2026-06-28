@@ -49,7 +49,7 @@ it('updates the title, resets moderation to pending and re-queues moderation', f
     $categoryId = seedCategoryForUpdate();
     $id = seedListing($user->id, $categoryId);
 
-    $response = $this->patchJson("/api/listings/{$id}", ['title' => 'Brand New Driver']);
+    $response = $this->patchJson("/api/v1/listings/{$id}", ['title' => 'Brand New Driver']);
 
     $response->assertOk()
         ->assertJsonPath('title', 'Brand New Driver')
@@ -76,7 +76,7 @@ it('updates price and condition, resets enrichment and re-queues enrichment', fu
     $categoryId = seedCategoryForUpdate();
     $id = seedListing($user->id, $categoryId);
 
-    $this->patchJson("/api/listings/{$id}", ['price' => 250.5, 'condition' => 'New'])
+    $this->patchJson("/api/v1/listings/{$id}", ['price' => 250.5, 'condition' => 'New'])
         ->assertOk()
         ->assertJsonPath('ai_enrichment_status', 'pending');
 
@@ -100,7 +100,7 @@ it('returns 200 without dispatching ListingUpdated when no field actually change
     $categoryId = seedCategoryForUpdate();
     $id = seedListing($user->id, $categoryId);
 
-    $this->patchJson("/api/listings/{$id}", ['title' => 'Driver Pro', 'price' => 199.99])
+    $this->patchJson("/api/v1/listings/{$id}", ['title' => 'Driver Pro', 'price' => 199.99])
         ->assertOk()
         ->assertJsonPath('title', 'Driver Pro');
 
@@ -118,7 +118,7 @@ it('does not re-queue jobs when only category_id changes', function () {
     $otherCategoryId = seedCategoryForUpdate('Putters');
     $id = seedListing($user->id, $categoryId);
 
-    $this->patchJson("/api/listings/{$id}", ['category_id' => $otherCategoryId])->assertOk();
+    $this->patchJson("/api/v1/listings/{$id}", ['category_id' => $otherCategoryId])->assertOk();
 
     Queue::assertNotPushed(ModerationJob::class);
     Queue::assertNotPushed(EnrichmentJob::class);
@@ -131,7 +131,7 @@ it('returns 403 when the actor is not the owner', function () {
 
     Sanctum::actingAs(User::factory()->create());
 
-    $this->patchJson("/api/listings/{$id}", ['title' => 'Hacked Title'])
+    $this->patchJson("/api/v1/listings/{$id}", ['title' => 'Hacked Title'])
         ->assertForbidden()
         ->assertJsonPath('error.code', 'FORBIDDEN');
 });
@@ -139,7 +139,7 @@ it('returns 403 when the actor is not the owner', function () {
 it('returns 404 when the listing does not exist', function () {
     Sanctum::actingAs(User::factory()->create());
 
-    $this->patchJson('/api/listings/999999', ['title' => 'Nope'])
+    $this->patchJson('/api/v1/listings/999999', ['title' => 'Nope'])
         ->assertNotFound()
         ->assertJsonPath('error.code', 'NOT_FOUND');
 });
@@ -150,7 +150,7 @@ it('returns 404 when the listing is cancelled', function () {
     $categoryId = seedCategoryForUpdate();
     $id = seedListing($user->id, $categoryId, ['cancelled_at' => now()]);
 
-    $this->patchJson("/api/listings/{$id}", ['title' => 'Anything'])
+    $this->patchJson("/api/v1/listings/{$id}", ['title' => 'Anything'])
         ->assertNotFound()
         ->assertJsonPath('error.code', 'NOT_FOUND');
 });
@@ -161,7 +161,7 @@ it('returns 422 with the normative envelope on an invalid field', function () {
     $categoryId = seedCategoryForUpdate();
     $id = seedListing($user->id, $categoryId);
 
-    $this->patchJson("/api/listings/{$id}", ['title' => 'Driver 3000'])
+    $this->patchJson("/api/v1/listings/{$id}", ['title' => 'Driver 3000'])
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'VALIDATION_ERROR')
         ->assertJsonStructure(['error' => ['code', 'message', 'details']]);
@@ -172,6 +172,6 @@ it('returns 401 when no token is provided', function () {
     $categoryId = seedCategoryForUpdate();
     $id = seedListing($owner->id, $categoryId);
 
-    $this->patchJson("/api/listings/{$id}", ['title' => 'New Title'])
+    $this->patchJson("/api/v1/listings/{$id}", ['title' => 'New Title'])
         ->assertUnauthorized();
 });

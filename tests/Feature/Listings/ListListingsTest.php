@@ -54,7 +54,7 @@ it('returns only visible listings ordered by created_at ASC by default', functio
     seedListingForList($user->id, $categoryId, ['title' => 'Cancelled', 'cancelled_at' => now()]);
     seedListingForList($user->id, $categoryId, ['title' => 'Expired', 'end_date' => now()->subDay()->toDateString()]);
 
-    $this->getJson('/api/listings')
+    $this->getJson('/api/v1/listings')
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('data.0.id', $older)
@@ -68,7 +68,7 @@ it('includes a future and a null end_date when not showing all', function () {
     seedListingForList($user->id, $categoryId, ['title' => 'Future', 'end_date' => now()->addDays(10)->toDateString()]);
     seedListingForList($user->id, $categoryId, ['title' => 'NoEnd', 'end_date' => null]);
 
-    $this->getJson('/api/listings')
+    $this->getJson('/api/v1/listings')
         ->assertOk()
         ->assertJsonCount(2, 'data');
 });
@@ -81,7 +81,7 @@ it('returns all listings ordered by price DESC when show_all=true', function () 
     seedListingForList($user->id, $categoryId, ['title' => 'Expensive', 'price' => 300.00, 'moderation_status' => 'pending']);
     seedListingForList($user->id, $categoryId, ['title' => 'Mid', 'price' => 200.00, 'cancelled_at' => now()]);
 
-    $this->getJson('/api/listings?show_all=true')
+    $this->getJson('/api/v1/listings?show_all=true')
         ->assertOk()
         ->assertJsonCount(3, 'data')
         ->assertJsonPath('data.0.title', 'Expensive')
@@ -98,22 +98,22 @@ it('filters by price range, category, condition and search term', function () {
     seedListingForList($user->id, $drivers, ['title' => 'Pricey Driver', 'price' => 500.00, 'condition' => 'Used']);
     seedListingForList($user->id, $putters, ['title' => 'Blade Putter', 'price' => 150.00, 'condition' => 'Used']);
 
-    $this->getJson('/api/listings?min_price=100&max_price=400')
+    $this->getJson('/api/v1/listings?min_price=100&max_price=400')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.title', 'Blade Putter');
 
-    $this->getJson("/api/listings?category_id={$putters}")
+    $this->getJson("/api/v1/listings?category_id={$putters}")
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.title', 'Blade Putter');
 
-    $this->getJson('/api/listings?condition=New')
+    $this->getJson('/api/v1/listings?condition=New')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.title', 'Cheap Driver');
 
-    $this->getJson('/api/listings?q=Blade')
+    $this->getJson('/api/v1/listings?q=Blade')
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.title', 'Blade Putter');
@@ -130,13 +130,13 @@ it('paginates with per_page and page', function () {
         ]);
     }
 
-    $this->getJson('/api/listings?per_page=2')
+    $this->getJson('/api/v1/listings?per_page=2')
         ->assertOk()
         ->assertJsonCount(2, 'data')
         ->assertJsonPath('meta.per_page', 2)
         ->assertJsonPath('meta.total', 3);
 
-    $this->getJson('/api/listings?per_page=2&page=2')
+    $this->getJson('/api/v1/listings?per_page=2&page=2')
         ->assertOk()
         ->assertJsonCount(1, 'data');
 });
@@ -155,7 +155,7 @@ it('shapes the item with split user name, category object and ai_enrichment', fu
         ]),
     ]);
 
-    $this->getJson('/api/listings')
+    $this->getJson('/api/v1/listings')
         ->assertOk()
         ->assertJsonPath('data.0.title', 'Sand Wedge')
         ->assertJsonPath('data.0.price', 89.5)
@@ -173,20 +173,20 @@ it('returns ai_enrichment as null when absent', function () {
 
     seedListingForList($user->id, $categoryId, ['ai_enrichment' => null]);
 
-    $this->getJson('/api/listings')
+    $this->getJson('/api/v1/listings')
         ->assertOk()
         ->assertJsonPath('data.0.ai_enrichment', null);
 });
 
 it('returns 422 with the normative envelope on an invalid query param', function () {
-    $this->getJson('/api/listings?per_page=999')
+    $this->getJson('/api/v1/listings?per_page=999')
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'VALIDATION_ERROR')
         ->assertJsonStructure(['error' => ['code', 'message', 'details']]);
 });
 
 it('returns 422 when show_all is not a recognized boolean', function () {
-    $this->getJson('/api/listings?show_all=banana')
+    $this->getJson('/api/v1/listings?show_all=banana')
         ->assertUnprocessable()
         ->assertJsonPath('error.code', 'VALIDATION_ERROR')
         ->assertJsonStructure(['error' => ['code', 'message', 'details']]);
@@ -197,7 +197,7 @@ it('accepts show_all=false as a valid boolean query param', function () {
     $categoryId = seedCategoryForList();
     seedListingForList($user->id, $categoryId, ['title' => 'Visible']);
 
-    $this->getJson('/api/listings?show_all=false')
+    $this->getJson('/api/v1/listings?show_all=false')
         ->assertOk()
         ->assertJsonCount(1, 'data');
 });
@@ -207,5 +207,5 @@ it('is publicly accessible without a token', function () {
     $categoryId = seedCategoryForList();
     seedListingForList($user->id, $categoryId);
 
-    $this->getJson('/api/listings')->assertOk();
+    $this->getJson('/api/v1/listings')->assertOk();
 });

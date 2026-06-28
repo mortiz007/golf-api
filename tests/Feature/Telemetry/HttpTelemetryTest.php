@@ -26,18 +26,18 @@ it('emits http.request and http.outcome for an API request', function () {
     /** @var TestCase $this */
     $logger = captureTelemetry();
 
-    $this->getJson('/api/listings')->assertOk();
+    $this->getJson('/api/v1/listings')->assertOk();
 
     $request = $logger->eventsNamed('http.request');
     $outcome = $logger->eventsNamed('http.outcome');
 
     expect($request)->toHaveCount(1)
         ->and($request[0]['context']['method'])->toBe('GET')
-        ->and($request[0]['context']['path'])->toBe('/api/listings')
+        ->and($request[0]['context']['path'])->toBe('/api/v1/listings')
         ->and($outcome)->toHaveCount(1)
         ->and($outcome[0]['context']['status'])->toBe(200)
         ->and($outcome[0]['context']['method'])->toBe('GET')
-        ->and($outcome[0]['context']['path'])->toBe('/api/listings')
+        ->and($outcome[0]['context']['path'])->toBe('/api/v1/listings')
         ->and($outcome[0]['context'])->toHaveKey('duration_ms');
 });
 
@@ -45,7 +45,7 @@ it('records the final status for error responses', function () {
     /** @var TestCase $this */
     $logger = captureTelemetry();
 
-    $this->postJson('/api/listings', [])->assertUnauthorized();
+    $this->postJson('/api/v1/listings', [])->assertUnauthorized();
 
     $outcome = $logger->eventsNamed('http.outcome');
 
@@ -57,7 +57,7 @@ it('never logs the query string or user content at the HTTP boundary', function 
     /** @var TestCase $this */
     $logger = captureTelemetry();
 
-    $this->getJson('/api/listings?q=secret-search-term&min_price=10')->assertOk();
+    $this->getJson('/api/v1/listings?q=secret-search-term&min_price=10')->assertOk();
 
     $encoded = json_encode($logger->events);
 

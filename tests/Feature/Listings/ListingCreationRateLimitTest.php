@@ -33,10 +33,10 @@ it('caps listing creation per user per day and returns the RATE_LIMITED envelope
     ];
 
     for ($i = 0; $i < 3; $i++) {
-        $this->postJson('/api/listings', $payload)->assertCreated();
+        $this->postJson('/api/v1/listings', $payload)->assertCreated();
     }
 
-    $this->postJson('/api/listings', $payload)
+    $this->postJson('/api/v1/listings', $payload)
         ->assertStatus(429)
         ->assertHeader('Retry-After')
         ->assertJsonPath('error.code', 'RATE_LIMITED')
@@ -64,10 +64,10 @@ it('scopes the daily cap per user', function () {
     ];
 
     Sanctum::actingAs(User::factory()->create());
-    $this->postJson('/api/listings', $payload)->assertCreated();
-    $this->postJson('/api/listings', $payload)->assertStatus(429);
+    $this->postJson('/api/v1/listings', $payload)->assertCreated();
+    $this->postJson('/api/v1/listings', $payload)->assertStatus(429);
 
     // A different user is not affected by the first user's cap.
     Sanctum::actingAs(User::factory()->create());
-    $this->postJson('/api/listings', $payload)->assertCreated();
+    $this->postJson('/api/v1/listings', $payload)->assertCreated();
 });

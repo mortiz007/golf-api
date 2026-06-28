@@ -35,7 +35,7 @@
   ],
   "item": [
     {
-      "name": "01 - GET /api/listings (Público)",
+      "name": "01 - GET /api/v1/listings (Público)",
       "description": "Listado público paginado con filtros y reglas de visibilidad (#4, #5). No requiere autenticación.",
       "item": [
         {
@@ -44,9 +44,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -93,9 +93,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?show_all=true&per_page=100",
+              "raw": "{{base_url}}/api/v1/listings?show_all=true&per_page=100",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [
                 { "key": "show_all", "value": "true" },
                 { "key": "per_page", "value": "100" }
@@ -128,9 +128,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?category_id=3",
+              "raw": "{{base_url}}/api/v1/listings?category_id=3",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "category_id", "value": "3" } ]
             }
           },
@@ -158,9 +158,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?condition=New",
+              "raw": "{{base_url}}/api/v1/listings?condition=New",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "condition", "value": "New" } ]
             }
           },
@@ -188,9 +188,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?min_price=100&max_price=300",
+              "raw": "{{base_url}}/api/v1/listings?min_price=100&max_price=300",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [
                 { "key": "min_price", "value": "100" },
                 { "key": "max_price", "value": "300" }
@@ -223,9 +223,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?q=utility",
+              "raw": "{{base_url}}/api/v1/listings?q=utility",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "q", "value": "utility" } ]
             }
           },
@@ -252,9 +252,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?per_page=2&page=1",
+              "raw": "{{base_url}}/api/v1/listings?per_page=2&page=1",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [
                 { "key": "per_page", "value": "2" },
                 { "key": "page", "value": "1" }
@@ -286,9 +286,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?condition=Broken",
+              "raw": "{{base_url}}/api/v1/listings?condition=Broken",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "condition", "value": "Broken" } ]
             }
           },
@@ -315,9 +315,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?per_page=500",
+              "raw": "{{base_url}}/api/v1/listings?per_page=500",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "per_page", "value": "500" } ]
             }
           },
@@ -341,9 +341,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?category_id=999999",
+              "raw": "{{base_url}}/api/v1/listings?category_id=999999",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "category_id", "value": "999999" } ]
             }
           },
@@ -367,9 +367,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?show_all=banana",
+              "raw": "{{base_url}}/api/v1/listings?show_all=banana",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "show_all", "value": "banana" } ]
             }
           },
@@ -393,9 +393,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings?min_price=-5",
+              "raw": "{{base_url}}/api/v1/listings?min_price=-5",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ],
+              "path": [ "api", "v1", "listings" ],
               "query": [ { "key": "min_price", "value": "-5" } ]
             }
           },
@@ -416,7 +416,7 @@
       ]
     },
     {
-      "name": "02 - POST /api/listings (Crear)",
+      "name": "02 - POST /api/v1/listings (Crear)",
       "description": "Creación autenticada. El 201 guarda created_listing_id para los PATCH/DELETE individuales.",
       "item": [
         {
@@ -433,9 +433,9 @@
               "raw": "{\n  \"title\": \"Premium Test Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"A brand new premium driver created through Postman automation.\",\n  \"end_date\": \"{{future_date}}\",\n  \"category_id\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -473,9 +473,9 @@
               "raw": "{\n  \"title\": \"No Auth Driver\",\n  \"price\": 100.00,\n  \"condition\": \"Used\",\n  \"description\": \"This request has no bearer token at all.\",\n  \"category_id\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -506,9 +506,9 @@
               "raw": "{\n  \"title\": \"Driver 3000\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"Title contains digits which is not allowed by regex.\",\n  \"category_id\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -542,9 +542,9 @@
               "raw": "{\n  \"title\": \"Short Desc Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"short\",\n  \"category_id\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -575,9 +575,9 @@
               "raw": "{\n  \"title\": \"Past Date Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"End date is in the past which must be rejected.\",\n  \"end_date\": \"{{past_date}}\",\n  \"category_id\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -605,9 +605,9 @@
             ],
             "body": { "mode": "raw", "raw": "{}" },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -642,9 +642,9 @@
               "raw": "{\n  \"title\": \"Bad Category Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"Category id does not exist in the categories table.\",\n  \"category_id\": 999999\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -675,9 +675,9 @@
               "raw": "{\n  \"title\": \"Free Driver\",\n  \"price\": 0,\n  \"condition\": \"New\",\n  \"description\": \"Price must be at least 0.01 so zero is invalid.\",\n  \"category_id\": 1\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings",
+              "raw": "{{base_url}}/api/v1/listings",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings" ]
+              "path": [ "api", "v1", "listings" ]
             }
           },
           "event": [
@@ -697,7 +697,7 @@
       ]
     },
     {
-      "name": "03 - PATCH /api/listings/{id} (Actualizar)",
+      "name": "03 - PATCH /api/v1/listings/{id} (Actualizar)",
       "description": "Actualización parcial, solo dueño. Los casos felices usan {{created_listing_id}} (ejecuta antes '201 - Crear listing (Alice)').",
       "item": [
         {
@@ -714,9 +714,9 @@
               "raw": "{\n  \"title\": \"Updated Premium Driver\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -748,9 +748,9 @@
               "raw": "{\n  \"price\": 333.33\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -779,9 +779,9 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
             "url": {
-              "raw": "{{base_url}}/api/listings/2",
+              "raw": "{{base_url}}/api/v1/listings/2",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "2" ]
+              "path": [ "api", "v1", "listings", "2" ]
             }
           },
           "event": [
@@ -809,9 +809,9 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
             "url": {
-              "raw": "{{base_url}}/api/listings/999999",
+              "raw": "{{base_url}}/api/v1/listings/999999",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "999999" ]
+              "path": [ "api", "v1", "listings", "999999" ]
             }
           },
           "event": [
@@ -839,9 +839,9 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
             "url": {
-              "raw": "{{base_url}}/api/listings/5",
+              "raw": "{{base_url}}/api/v1/listings/5",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "5" ]
+              "path": [ "api", "v1", "listings", "5" ]
             }
           },
           "event": [
@@ -869,9 +869,9 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"title\": \"Bad 123\"\n}" },
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -898,9 +898,9 @@
             ],
             "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -920,7 +920,7 @@
       ]
     },
     {
-      "name": "04 - DELETE /api/listings/{id} (Cancelar)",
+      "name": "04 - DELETE /api/v1/listings/{id} (Cancelar)",
       "description": "Cancelación (soft-delete), solo dueño, idempotente. Los casos felices usan {{created_listing_id}}.",
       "item": [
         {
@@ -932,9 +932,9 @@
               { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -959,9 +959,9 @@
               { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -985,9 +985,9 @@
               { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/api/listings/2",
+              "raw": "{{base_url}}/api/v1/listings/2",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "2" ]
+              "path": [ "api", "v1", "listings", "2" ]
             }
           },
           "event": [
@@ -1013,9 +1013,9 @@
               { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/api/listings/999999",
+              "raw": "{{base_url}}/api/v1/listings/999999",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "999999" ]
+              "path": [ "api", "v1", "listings", "999999" ]
             }
           },
           "event": [
@@ -1038,9 +1038,9 @@
             "method": "DELETE",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "raw": "{{base_url}}/api/v1/listings/{{created_listing_id}}",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "listings", "{{created_listing_id}}" ]
+              "path": [ "api", "v1", "listings", "{{created_listing_id}}" ]
             }
           },
           "event": [
@@ -1060,7 +1060,7 @@
       ]
     },
     {
-      "name": "05 - GET /api/audit-logs",
+      "name": "05 - GET /api/v1/audit-logs",
       "description": "Logs de auditoría del usuario autenticado. Requiere worker (php artisan queue:work) para que los eventos se materialicen.",
       "item": [
         {
@@ -1072,9 +1072,9 @@
               { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/api/audit-logs",
+              "raw": "{{base_url}}/api/v1/audit-logs",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "audit-logs" ]
+              "path": [ "api", "v1", "audit-logs" ]
             }
           },
           "event": [
@@ -1115,9 +1115,9 @@
               { "key": "Authorization", "value": "Bearer {{bearer_token_bob}}" }
             ],
             "url": {
-              "raw": "{{base_url}}/api/audit-logs",
+              "raw": "{{base_url}}/api/v1/audit-logs",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "audit-logs" ]
+              "path": [ "api", "v1", "audit-logs" ]
             }
           },
           "event": [
@@ -1143,9 +1143,9 @@
             "method": "GET",
             "header": [ { "key": "Accept", "value": "application/json" } ],
             "url": {
-              "raw": "{{base_url}}/api/audit-logs",
+              "raw": "{{base_url}}/api/v1/audit-logs",
               "host": [ "{{base_url}}" ],
-              "path": [ "api", "audit-logs" ]
+              "path": [ "api", "v1", "audit-logs" ]
             }
           },
           "event": [
@@ -1185,9 +1185,9 @@
                   "raw": "{\n  \"title\": \"Lifecycle Flow Driver\",\n  \"price\": 410.00,\n  \"condition\": \"Like New\",\n  \"description\": \"Listing created to exercise the full lifecycle flow end to end.\",\n  \"end_date\": \"{{future_date}}\",\n  \"category_id\": 1\n}"
                 },
                 "url": {
-                  "raw": "{{base_url}}/api/listings",
+                  "raw": "{{base_url}}/api/v1/listings",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings" ]
+                  "path": [ "api", "v1", "listings" ]
                 }
               },
               "event": [
@@ -1212,9 +1212,9 @@
                 "method": "GET",
                 "header": [ { "key": "Accept", "value": "application/json" } ],
                 "url": {
-                  "raw": "{{base_url}}/api/listings?per_page=100",
+                  "raw": "{{base_url}}/api/v1/listings?per_page=100",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings" ],
+                  "path": [ "api", "v1", "listings" ],
                   "query": [ { "key": "per_page", "value": "100" } ]
                 }
               },
@@ -1240,9 +1240,9 @@
                 "method": "GET",
                 "header": [ { "key": "Accept", "value": "application/json" } ],
                 "url": {
-                  "raw": "{{base_url}}/api/listings?show_all=true&per_page=100",
+                  "raw": "{{base_url}}/api/v1/listings?show_all=true&per_page=100",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings" ],
+                  "path": [ "api", "v1", "listings" ],
                   "query": [
                     { "key": "show_all", "value": "true" },
                     { "key": "per_page", "value": "100" }
@@ -1276,9 +1276,9 @@
                 ],
                 "body": { "mode": "raw", "raw": "{\n  \"title\": \"Lifecycle Flow Driver Edited\"\n}" },
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1309,9 +1309,9 @@
                 ],
                 "body": { "mode": "raw", "raw": "{\n  \"price\": 455.55\n}" },
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1340,9 +1340,9 @@
                   { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1366,9 +1366,9 @@
                   { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1394,9 +1394,9 @@
                 ],
                 "body": { "mode": "raw", "raw": "{\n  \"price\": 1.00\n}" },
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1422,9 +1422,9 @@
                   { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/audit-logs",
+                  "raw": "{{base_url}}/api/v1/audit-logs",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "audit-logs" ]
+                  "path": [ "api", "v1", "audit-logs" ]
                 }
               },
               "event": [
@@ -1470,9 +1470,9 @@
                   "raw": "{\n  \"title\": \"Bob Security Flow Putter\",\n  \"price\": 120.00,\n  \"condition\": \"Used\",\n  \"description\": \"Listing owned by Bob to test ownership boundaries against Alice.\",\n  \"end_date\": \"{{future_date}}\",\n  \"category_id\": 7\n}"
                 },
                 "url": {
-                  "raw": "{{base_url}}/api/listings",
+                  "raw": "{{base_url}}/api/v1/listings",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings" ]
+                  "path": [ "api", "v1", "listings" ]
                 }
               },
               "event": [
@@ -1502,9 +1502,9 @@
                 ],
                 "body": { "mode": "raw", "raw": "{\n  \"price\": 1.00\n}" },
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{bob_flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{bob_flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1530,9 +1530,9 @@
                   { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{bob_flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{bob_flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1558,9 +1558,9 @@
                   { "key": "Authorization", "value": "Bearer {{bearer_token_bob}}" }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{bob_flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{bob_flow_listing_id}}" ]
                 }
               },
               "event": [
@@ -1586,9 +1586,9 @@
                 ],
                 "body": { "mode": "raw", "raw": "{\n  \"price\": 5.00\n}" },
                 "url": {
-                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "raw": "{{base_url}}/api/v1/listings/{{bob_flow_listing_id}}",
                   "host": [ "{{base_url}}" ],
-                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                  "path": [ "api", "v1", "listings", "{{bob_flow_listing_id}}" ]
                 }
               },
               "event": [
