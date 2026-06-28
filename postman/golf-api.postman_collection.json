@@ -1,0 +1,1613 @@
+{
+  "info": {
+    "_postman_id": "9f1c2a6e-7b3d-4d2a-9e2f-golf-api-0001",
+    "name": "Golf API - Listings (Local)",
+    "description": "Colección completa para la Golf API (Laravel 12). Cubre los endpoints públicos y autenticados con casos positivos y negativos (200/201/204/401/403/404/422) y flujos completos automatizados, basados en la data de los seeders.\n\nVariables de colección:\n- base_url: http://127.0.0.1:8000\n- bearer_token_alice: 1|golf-seed-token-alice (Alice Walker, user_id 1)\n- bearer_token_bob: 2|golf-seed-token-bob (Bob Stone, user_id 2)\n- created_listing_id / flow_listing_id / bob_flow_listing_id: se rellenan dinámicamente.\n- future_date / past_date: fechas dinámicas calculadas en el pre-request de colección.\n\nIMPORTANTE:\n1. Levanta el servidor: php artisan serve\n2. Siembra la base: php artisan migrate:fresh --seed\n3. Para que se generen los audit-logs (y se procese moderación/enriquecimiento), corre un worker: php artisan queue:work\n4. Ejecuta los requests respetando el orden de las carpetas (POST crea el id que usan PATCH/DELETE).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Variables dinámicas reutilizables por todos los requests.",
+          "const future = new Date();",
+          "future.setDate(future.getDate() + 30);",
+          "pm.collectionVariables.set('future_date', future.toISOString().slice(0, 10));",
+          "",
+          "const past = new Date();",
+          "past.setDate(past.getDate() - 5);",
+          "pm.collectionVariables.set('past_date', past.toISOString().slice(0, 10));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000", "type": "string" },
+    { "key": "bearer_token_alice", "value": "1|golf-seed-token-alice", "type": "string" },
+    { "key": "bearer_token_bob", "value": "2|golf-seed-token-bob", "type": "string" },
+    { "key": "created_listing_id", "value": "", "type": "string" },
+    { "key": "flow_listing_id", "value": "", "type": "string" },
+    { "key": "bob_flow_listing_id", "value": "", "type": "string" },
+    { "key": "future_date", "value": "", "type": "string" },
+    { "key": "past_date", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01 - GET /api/listings (Público)",
+      "description": "Listado público paginado con filtros y reglas de visibilidad (#4, #5). No requiere autenticación.",
+      "item": [
+        {
+          "name": "200 - Listado público (solo visibles)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Tiene estructura paginada (data/meta)', () => {",
+                  "  pm.expect(j).to.have.property('data');",
+                  "  pm.expect(j).to.have.property('meta');",
+                  "});",
+                  "pm.test('Solo 6 listings visibles del seed', () => {",
+                  "  pm.expect(j.meta.total).to.eql(6);",
+                  "});",
+                  "const titles = j.data.map(i => i.title);",
+                  "pm.test('Incluye aprobados/visibles', () => {",
+                  "  pm.expect(titles).to.include('Titanium Driver Pro');",
+                  "  pm.expect(titles).to.include('Rescue Hybrid Max');",
+                  "});",
+                  "pm.test('Excluye pending/rejected/cancelado/expirado', () => {",
+                  "  pm.expect(titles).to.not.include('Forged Iron Set');",
+                  "  pm.expect(titles).to.not.include('Sand Wedge Special');",
+                  "  pm.expect(titles).to.not.include('Fairway Wood Three');",
+                  "  pm.expect(titles).to.not.include('Adjustable Hybrid Club');",
+                  "});",
+                  "pm.test('Cada item expone user{first_name,last_name} y category', () => {",
+                  "  const it = j.data[0];",
+                  "  pm.expect(it.user).to.have.property('first_name');",
+                  "  pm.expect(it.user).to.have.property('last_name');",
+                  "  pm.expect(it.category).to.have.property('name');",
+                  "  pm.expect(it).to.have.property('ai_enrichment');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - show_all=true (incluye no visibles)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?show_all=true&per_page=100",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [
+                { "key": "show_all", "value": "true" },
+                { "key": "per_page", "value": "100" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Total >= 10 (todos los seeds)', () => pm.expect(j.meta.total).to.be.at.least(10));",
+                  "const titles = j.data.map(i => i.title);",
+                  "pm.test('Incluye listings normalmente ocultos', () => {",
+                  "  pm.expect(titles).to.include('Forged Iron Set');",
+                  "  pm.expect(titles).to.include('Sand Wedge Special');",
+                  "  pm.expect(titles).to.include('Adjustable Hybrid Club');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Filtro category_id (Hybrids)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?category_id=3",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "category_id", "value": "3" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Solo 1 hybrid visible (Rescue Hybrid Max)', () => {",
+                  "  pm.expect(j.meta.total).to.eql(1);",
+                  "  pm.expect(j.data[0].title).to.eql('Rescue Hybrid Max');",
+                  "  pm.expect(j.data[0].category.name).to.eql('Hybrids');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Filtro condition=New",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?condition=New",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "condition", "value": "New" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Solo 1 New visible (Rescue Hybrid Max)', () => {",
+                  "  pm.expect(j.meta.total).to.eql(1);",
+                  "  pm.expect(j.data[0].condition).to.eql('New');",
+                  "  pm.expect(j.data[0].title).to.eql('Rescue Hybrid Max');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Filtro rango de precio (100-300)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?min_price=100&max_price=300",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [
+                { "key": "min_price", "value": "100" },
+                { "key": "max_price", "value": "300" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('3 listings visibles en el rango', () => pm.expect(j.meta.total).to.eql(3));",
+                  "pm.test('Todos los precios entre 100 y 300', () => {",
+                  "  j.data.forEach(i => {",
+                  "    pm.expect(i.price).to.be.at.least(100);",
+                  "    pm.expect(i.price).to.be.at.most(300);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Búsqueda q=utility",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?q=utility",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "q", "value": "utility" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Encuentra Utility Driving Iron', () => {",
+                  "  pm.expect(j.meta.total).to.eql(1);",
+                  "  pm.expect(j.data[0].title).to.eql('Utility Driving Iron');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Paginación (per_page=2&page=1)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?per_page=2&page=1",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [
+                { "key": "per_page", "value": "2" },
+                { "key": "page", "value": "1" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Metadatos de paginación correctos', () => {",
+                  "  pm.expect(j.meta.per_page).to.eql(2);",
+                  "  pm.expect(j.meta.total).to.eql(6);",
+                  "  pm.expect(j.meta.last_page).to.eql(3);",
+                  "  pm.expect(j.data.length).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - condition inválido",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?condition=Broken",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "condition", "value": "Broken" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope VALIDATION_ERROR con detalle de condition', () => {",
+                  "  pm.expect(j.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(j.error.details).to.have.property('condition');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - per_page > 100",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?per_page=500",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "per_page", "value": "500" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de per_page', () => pm.expect(j.error.details).to.have.property('per_page'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - category_id inexistente",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?category_id=999999",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "category_id", "value": "999999" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de category_id (exists)', () => pm.expect(j.error.details).to.have.property('category_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - show_all inválido",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?show_all=banana",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "show_all", "value": "banana" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de show_all', () => pm.expect(j.error.details).to.have.property('show_all'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - min_price negativo",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings?min_price=-5",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ],
+              "query": [ { "key": "min_price", "value": "-5" } ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de min_price', () => pm.expect(j.error.details).to.have.property('min_price'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - POST /api/listings (Crear)",
+      "description": "Creación autenticada. El 201 guarda created_listing_id para los PATCH/DELETE individuales.",
+      "item": [
+        {
+          "name": "201 - Crear listing (Alice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Premium Test Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"A brand new premium driver created through Postman automation.\",\n  \"end_date\": \"{{future_date}}\",\n  \"category_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test('Estados iniciales en pending y ai_enrichment null', () => {",
+                  "  pm.expect(j.moderation_status).to.eql('pending');",
+                  "  pm.expect(j.ai_enrichment_status).to.eql('pending');",
+                  "  pm.expect(j.ai_enrichment).to.eql(null);",
+                  "});",
+                  "pm.test('Owner es Alice Walker', () => pm.expect(j.user.name).to.eql('Alice Walker'));",
+                  "pm.test('Header Location presente', () => pm.expect(pm.response.headers.has('Location')).to.be.true);",
+                  "pm.collectionVariables.set('created_listing_id', j.id);",
+                  "console.log('created_listing_id =', j.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 - Sin token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"No Auth Driver\",\n  \"price\": 100.00,\n  \"condition\": \"Used\",\n  \"description\": \"This request has no bearer token at all.\",\n  \"category_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope UNAUTHENTICATED', () => pm.expect(j.error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - title con números",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Driver 3000\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"Title contains digits which is not allowed by regex.\",\n  \"category_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de title', () => {",
+                  "  pm.expect(j.error.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(j.error.details).to.have.property('title');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - description muy corta",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Short Desc Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"short\",\n  \"category_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de description', () => pm.expect(j.error.details).to.have.property('description'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - end_date en el pasado",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Past Date Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"End date is in the past which must be rejected.\",\n  \"end_date\": \"{{past_date}}\",\n  \"category_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de end_date', () => pm.expect(j.error.details).to.have.property('end_date'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - Campos requeridos faltantes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Reporta todos los campos requeridos', () => {",
+                  "  ['title','price','condition','description','category_id'].forEach(f => {",
+                  "    pm.expect(j.error.details, f).to.have.property(f);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - category_id inexistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bad Category Driver\",\n  \"price\": 250.00,\n  \"condition\": \"New\",\n  \"description\": \"Category id does not exist in the categories table.\",\n  \"category_id\": 999999\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de category_id', () => pm.expect(j.error.details).to.have.property('category_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - price <= 0",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Free Driver\",\n  \"price\": 0,\n  \"condition\": \"New\",\n  \"description\": \"Price must be at least 0.01 so zero is invalid.\",\n  \"category_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de price', () => pm.expect(j.error.details).to.have.property('price'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - PATCH /api/listings/{id} (Actualizar)",
+      "description": "Actualización parcial, solo dueño. Los casos felices usan {{created_listing_id}} (ejecuta antes '201 - Crear listing (Alice)').",
+      "item": [
+        {
+          "name": "200 - Actualizar título (re-modera)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Premium Driver\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Título actualizado', () => pm.expect(j.title).to.eql('Updated Premium Driver'));",
+                  "pm.test('Cambiar título vuelve moderación a pending', () => pm.expect(j.moderation_status).to.eql('pending'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Actualizar precio (re-enriquece)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 333.33\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Precio actualizado', () => pm.expect(j.price).to.eql(333.33));",
+                  "pm.test('Cambiar precio vuelve enrichment a pending', () => pm.expect(j.ai_enrichment_status).to.eql('pending'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "403 - Editar listing de otro usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/listings/2",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "2" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope FORBIDDEN', () => pm.expect(j.error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 - Listing inexistente",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/listings/999999",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "999999" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope NOT_FOUND', () => pm.expect(j.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 - Listing cancelado (seed #5)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/listings/5",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "5" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404 (cancelado se trata como no encontrado)', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope NOT_FOUND', () => pm.expect(j.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 - Datos inválidos",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Bad 123\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const j = pm.response.json();",
+                  "pm.test('Detalle de title', () => pm.expect(j.error.details).to.have.property('title'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 - Sin token",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 10.00\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope UNAUTHENTICATED', () => pm.expect(j.error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - DELETE /api/listings/{id} (Cancelar)",
+      "description": "Cancelación (soft-delete), solo dueño, idempotente. Los casos felices usan {{created_listing_id}}.",
+      "item": [
+        {
+          "name": "204 - Cancelar listing propio",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "pm.test('Cuerpo vacío', () => pm.expect(pm.response.text()).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "204 - Re-cancelar (idempotente)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204 (idempotente)', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "403 - Cancelar de otro usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/listings/2",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "2" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope FORBIDDEN', () => pm.expect(j.error.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 - Listing inexistente",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/listings/999999",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "999999" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope NOT_FOUND', () => pm.expect(j.error.code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 - Sin token",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/listings/{{created_listing_id}}",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "listings", "{{created_listing_id}}" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope UNAUTHENTICATED', () => pm.expect(j.error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - GET /api/audit-logs",
+      "description": "Logs de auditoría del usuario autenticado. Requiere worker (php artisan queue:work) para que los eventos se materialicen.",
+      "item": [
+        {
+          "name": "200 - Audit logs de Alice",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/audit-logs",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "audit-logs" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Estructura paginada', () => {",
+                  "  pm.expect(j).to.have.property('data');",
+                  "  pm.expect(j.data).to.be.an('array');",
+                  "});",
+                  "if (j.data.length > 0) {",
+                  "  pm.test('Cada entrada tiene action/message/metadata/created_at', () => {",
+                  "    const e = j.data[0];",
+                  "    pm.expect(e).to.have.property('action');",
+                  "    pm.expect(e).to.have.property('message');",
+                  "    pm.expect(e).to.have.property('metadata');",
+                  "    pm.expect(e).to.have.property('created_at');",
+                  "    pm.expect(['created','updated','deleted']).to.include(e.action);",
+                  "  });",
+                  "} else {",
+                  "  console.log('Sin audit logs todavía. Ejecuta `php artisan queue:work` y vuelve a correr los flujos POST/PATCH/DELETE.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "200 - Audit logs de Bob",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{bearer_token_bob}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/audit-logs",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "audit-logs" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test('Estructura paginada', () => {",
+                  "  pm.expect(j).to.have.property('data');",
+                  "  pm.expect(j.data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 - Sin token",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Accept", "value": "application/json" } ],
+            "url": {
+              "raw": "{{base_url}}/api/audit-logs",
+              "host": [ "{{base_url}}" ],
+              "path": [ "api", "audit-logs" ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "const j = pm.response.json();",
+                  "pm.test('Envelope UNAUTHENTICATED', () => pm.expect(j.error.code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Flujos completos (automatizados)",
+      "description": "Flujos encadenados. Ejecútalos con el Collection Runner en orden. Flujo A: ciclo de vida (Alice). Flujo B: propiedad/seguridad (Alice vs Bob).",
+      "item": [
+        {
+          "name": "Flujo A - Ciclo de vida (Alice)",
+          "item": [
+            {
+              "name": "A1 - Crear (Alice)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Lifecycle Flow Driver\",\n  \"price\": 410.00,\n  \"condition\": \"Like New\",\n  \"description\": \"Listing created to exercise the full lifecycle flow end to end.\",\n  \"end_date\": \"{{future_date}}\",\n  \"category_id\": 1\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/listings",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A1 Status 201', () => pm.response.to.have.status(201));",
+                      "const j = pm.response.json();",
+                      "pm.test('A1 moderación pending', () => pm.expect(j.moderation_status).to.eql('pending'));",
+                      "pm.collectionVariables.set('flow_listing_id', j.id);",
+                      "console.log('flow_listing_id =', j.id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A2 - No visible por defecto (pending)",
+              "request": {
+                "method": "GET",
+                "header": [ { "key": "Accept", "value": "application/json" } ],
+                "url": {
+                  "raw": "{{base_url}}/api/listings?per_page=100",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings" ],
+                  "query": [ { "key": "per_page", "value": "100" } ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A2 Status 200', () => pm.response.to.have.status(200));",
+                      "const j = pm.response.json();",
+                      "const id = Number(pm.collectionVariables.get('flow_listing_id'));",
+                      "const ids = j.data.map(i => i.id);",
+                      "pm.test('A2 listing pending NO aparece en listado público', () => pm.expect(ids).to.not.include(id));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A3 - Visible con show_all=true",
+              "request": {
+                "method": "GET",
+                "header": [ { "key": "Accept", "value": "application/json" } ],
+                "url": {
+                  "raw": "{{base_url}}/api/listings?show_all=true&per_page=100",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings" ],
+                  "query": [
+                    { "key": "show_all", "value": "true" },
+                    { "key": "per_page", "value": "100" }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A3 Status 200', () => pm.response.to.have.status(200));",
+                      "const j = pm.response.json();",
+                      "const id = Number(pm.collectionVariables.get('flow_listing_id'));",
+                      "const ids = j.data.map(i => i.id);",
+                      "pm.test('A3 listing aparece con show_all', () => pm.expect(ids).to.include(id));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A4 - Actualizar título (Alice)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"title\": \"Lifecycle Flow Driver Edited\"\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A4 Status 200', () => pm.response.to.have.status(200));",
+                      "const j = pm.response.json();",
+                      "pm.test('A4 título actualizado y moderación pending', () => {",
+                      "  pm.expect(j.title).to.eql('Lifecycle Flow Driver Edited');",
+                      "  pm.expect(j.moderation_status).to.eql('pending');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A5 - Actualizar precio (Alice)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"price\": 455.55\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A5 Status 200', () => pm.response.to.have.status(200));",
+                      "const j = pm.response.json();",
+                      "pm.test('A5 precio actualizado y enrichment pending', () => {",
+                      "  pm.expect(j.price).to.eql(455.55);",
+                      "  pm.expect(j.ai_enrichment_status).to.eql('pending');",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A6 - Cancelar (Alice)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A6 Status 204', () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A7 - Re-cancelar (idempotente)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A7 Status 204 (idempotente)', () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A8 - PATCH sobre cancelado -> 404",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"price\": 1.00\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A8 Status 404', () => pm.response.to.have.status(404));",
+                      "const j = pm.response.json();",
+                      "pm.test('A8 Envelope NOT_FOUND', () => pm.expect(j.error.code).to.eql('NOT_FOUND'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "A9 - Audit logs de Alice",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/audit-logs",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "audit-logs" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('A9 Status 200', () => pm.response.to.have.status(200));",
+                      "const j = pm.response.json();",
+                      "pm.test('A9 estructura paginada', () => pm.expect(j.data).to.be.an('array'));",
+                      "if (j.data.length > 0) {",
+                      "  const actions = j.data.map(e => e.action);",
+                      "  pm.test('A9 incluye acciones del ciclo (created/updated/deleted)', () => {",
+                      "    pm.expect(actions).to.include('created');",
+                      "    pm.expect(actions).to.include('updated');",
+                      "    pm.expect(actions).to.include('deleted');",
+                      "  });",
+                      "} else {",
+                      "  console.log('Audit logs vacíos: asegúrate de tener `php artisan queue:work` corriendo.');",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Flujo B - Propiedad / seguridad",
+          "item": [
+            {
+              "name": "B1 - Crear (Bob)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_bob}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Bob Security Flow Putter\",\n  \"price\": 120.00,\n  \"condition\": \"Used\",\n  \"description\": \"Listing owned by Bob to test ownership boundaries against Alice.\",\n  \"end_date\": \"{{future_date}}\",\n  \"category_id\": 7\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/listings",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('B1 Status 201', () => pm.response.to.have.status(201));",
+                      "const j = pm.response.json();",
+                      "pm.test('B1 owner es Bob Stone', () => pm.expect(j.user.name).to.eql('Bob Stone'));",
+                      "pm.collectionVariables.set('bob_flow_listing_id', j.id);",
+                      "console.log('bob_flow_listing_id =', j.id);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "B2 - Alice intenta PATCH (Bob) -> 403",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"price\": 1.00\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('B2 Status 403', () => pm.response.to.have.status(403));",
+                      "const j = pm.response.json();",
+                      "pm.test('B2 Envelope FORBIDDEN', () => pm.expect(j.error.code).to.eql('FORBIDDEN'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "B3 - Alice intenta DELETE (Bob) -> 403",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_alice}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('B3 Status 403', () => pm.response.to.have.status(403));",
+                      "const j = pm.response.json();",
+                      "pm.test('B3 Envelope FORBIDDEN', () => pm.expect(j.error.code).to.eql('FORBIDDEN'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "B4 - Bob DELETE propio -> 204",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_bob}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('B4 Status 204', () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "B5 - Bob PATCH sobre cancelado -> 404",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Accept", "value": "application/json" },
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{bearer_token_bob}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"price\": 5.00\n}" },
+                "url": {
+                  "raw": "{{base_url}}/api/listings/{{bob_flow_listing_id}}",
+                  "host": [ "{{base_url}}" ],
+                  "path": [ "api", "listings", "{{bob_flow_listing_id}}" ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('B5 Status 404', () => pm.response.to.have.status(404));",
+                      "const j = pm.response.json();",
+                      "pm.test('B5 Envelope NOT_FOUND', () => pm.expect(j.error.code).to.eql('NOT_FOUND'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
