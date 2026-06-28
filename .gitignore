@@ -1,34 +1,62 @@
+# Sistema y logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .DS_Store
+Thumbs.db
+
+# Entorno y credenciales
 .env
-.env.backup
-.env.production
-.phpactor.json
-.phpunit.result.cache
-/.fleet
-/.idea
-/.nova
-/.phpunit.cache
-/.vscode
-/.zed
-/auth.json
+
+# Dependencias y artefactos de build
+/vendor
 /node_modules
 /public/build
 /public/hot
-/public/storage
+
+# Archivos de Composer y autenticación
+/auth.json
+
+# IDEs y editores
+/.idea
+/.vscode
+/.fleet
+/.zed
+
+# PHPUnit y caches de pruebas
+.phpunit.result.cache
+/.phpunit.cache
+
+# Laravel runtime (mantener .gitignore en cada subcarpeta)
+bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+
 /storage/*.key
 /storage/pail
-/vendor
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/app/public/*
+!/storage/app/public/.gitignore
+
+# Homestead / Vagrant
 Homestead.json
 Homestead.yaml
-Thumbs.db
-CLAUDE.md
-AGENTS.md
-.cursor/
+
+# Archivos y carpetas específicas del proyecto que suelen ser locales
+api.http
 mcp.json
+
+# Entradas específicas detectadas en tu .gitignore original
+/.nova
+.phpactor.json
+.cursor/
+.cursorignore
 app/abacusai/
 .abacusai/
-
-PLAN.md
-api.http
-.cursorignore
