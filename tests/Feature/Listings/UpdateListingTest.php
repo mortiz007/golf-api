@@ -91,6 +91,24 @@ it('updates price and condition, resets enrichment and re-queues enrichment', fu
     Queue::assertNotPushed(ModerationJob::class);
 });
 
+it('returns 200 without dispatching ListingUpdated when no field actually changes', function () {
+    Queue::fake();
+    Event::fake([ListingUpdated::class]);
+
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+    $categoryId = seedCategoryForUpdate();
+    $id = seedListing($user->id, $categoryId);
+
+    $this->patchJson("/api/listings/{$id}", ['title' => 'Driver Pro', 'price' => 199.99])
+        ->assertOk()
+        ->assertJsonPath('title', 'Driver Pro');
+
+    Event::assertNotDispatched(ListingUpdated::class);
+    Queue::assertNotPushed(ModerationJob::class);
+    Queue::assertNotPushed(EnrichmentJob::class);
+});
+
 it('does not re-queue jobs when only category_id changes', function () {
     Queue::fake();
 

@@ -119,7 +119,11 @@ it('resets moderation and re-queues it when the title changes', function () {
         ->and($result->aiEnrichmentStatus())->toBe(AiEnrichmentStatus::SUCCEEDED)
         ->and($dispatcher->moderationDispatched)->toBeTrue()
         ->and($dispatcher->enrichmentDispatched)->toBeFalse()
-        ->and($publisher->event)->toBeInstanceOf(ListingUpdated::class);
+        ->and($publisher->event)->toBeInstanceOf(ListingUpdated::class)
+        ->and($publisher->event->listingSnapshot['title'])->toBe('Brand New Driver')
+        ->and($publisher->event->listingSnapshot['changes'])->toBe([
+            'title' => ['old' => 'Driver Pro', 'new' => 'Brand New Driver'],
+        ]);
 });
 
 it('resets enrichment and re-queues it when the price changes', function () {
@@ -159,15 +163,31 @@ it('does not re-queue when only end_date or category_id change', function () {
         ->and($result->moderationStatus())->toBe(ModerationStatus::APPROVED);
 });
 
-it('does not re-queue when the submitted value equals the current one', function () {
+it('does not re-queue nor publish an event when the submitted value equals the current one', function () {
     $repository = fakeUpdateRepository(existingListing());
     $dispatcher = spyDispatcher();
+    $publisher = spyPublisher();
 
-    (new UpdateListingUseCase($repository, spyPublisher(), $dispatcher))
+    (new UpdateListingUseCase($repository, $publisher, $dispatcher))
         ->execute(command(['title' => 'Driver Pro', 'price' => 199.99]));
 
     expect($dispatcher->moderationDispatched)->toBeFalse()
-        ->and($dispatcher->enrichmentDispatched)->toBeFalse();
+        ->and($dispatcher->enrichmentDispatched)->toBeFalse()
+        ->and($publisher->event)->toBeNull();
+});
+
+it('publishes a diff with old/new for end_date and category_id changes', function () {
+    $repository = fakeUpdateRepository(existingListing());
+    $publisher = spyPublisher();
+
+    (new UpdateListingUseCase($repository, $publisher, spyDispatcher()))
+        ->execute(command(['end_date' => '2999-01-01', 'category_id' => 2]));
+
+    expect($publisher->event)->toBeInstanceOf(ListingUpdated::class)
+        ->and($publisher->event->listingSnapshot['changes'])->toBe([
+            'end_date' => ['old' => null, 'new' => '2999-01-01'],
+            'category_id' => ['old' => 1, 'new' => 2],
+        ]);
 });
 
 it('throws not found when the listing does not exist', function () {

@@ -78,6 +78,7 @@ it('records an audit log entry from event payload data', function () {
     $entry = AuditLogEntry::record(
         eventId: new EventId('550e8400-e29b-41d4-a716-446655440000'),
         userId: 45,
+        listingId: 123,
         action: AuditAction::Created,
         message: AuditMessage::forListing(AuditAction::Created, 'Driver X', 123, 45),
         metadata: $metadata,
@@ -85,6 +86,7 @@ it('records an audit log entry from event payload data', function () {
 
     expect((string) $entry->eventId())->toBe('550e8400-e29b-41d4-a716-446655440000')
         ->and($entry->userId())->toBe(45)
+        ->and($entry->listingId())->toBe(123)
         ->and($entry->action())->toBe(AuditAction::Created)
         ->and((string) $entry->message())->toBe("Created listing 'Driver X' (id: 123) by user 45")
         ->and($entry->metadata())->toBe($metadata);

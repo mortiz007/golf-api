@@ -53,10 +53,9 @@ it('records a single audit log when ListingCreated is dispatched', function () {
 
     $entry = AuditLogModel::first();
     expect($entry->metadata)->toMatchArray([
-        'id' => 123,
         'title' => 'Driver X',
         'category_id' => 1,
-    ]);
+    ])->and($entry->metadata)->not->toHaveKey('id');
 });
 
 it('is idempotent: re-dispatching the same event_id keeps a single row', function () {
@@ -68,16 +67,39 @@ it('is idempotent: re-dispatching the same event_id keeps a single row', functio
     $this->assertDatabaseCount('listing_audit_logs', 1);
 });
 
-it('records updated and deleted facts from synthetic events', function (string $eventClass, string $action, string $verb) {
-    event(new $eventClass(makeAuditListing(123)));
+it('records an updated fact listing the changed fields in the message', function () {
+    event(new ListingUpdated(makeAuditListing(123), [
+        'title' => ['old' => 'Old Driver', 'new' => 'Driver X'],
+        'price' => ['old' => 90, 'new' => 100],
+    ]));
 
     $this->assertDatabaseCount('listing_audit_logs', 1);
     $this->assertDatabaseHas('listing_audit_logs', [
         'listing_id' => 123,
-        'action' => $action,
-        'message' => "{$verb} listing 'Driver X' (id: 123) by user 45",
+        'action' => 'updated',
+        'message' => "Updated listing 'Driver X' (id: 123): title, price by user 45",
     ]);
-})->with([
-    [ListingUpdated::class, 'updated', 'Updated'],
-    [ListingDeleted::class, 'deleted', 'Deleted'],
-]);
+
+    $entry = AuditLogModel::first();
+    expect($entry->metadata)->toMatchArray([
+        'title' => 'Driver X',
+        'changes' => [
+            'title' => ['old' => 'Old Driver', 'new' => 'Driver X'],
+            'price' => ['old' => 90, 'new' => 100],
+        ],
+    ]);
+});
+
+it('records a deleted fact with a minimal title-only snapshot', function () {
+    event(new ListingDeleted(makeAuditListing(123)));
+
+    $this->assertDatabaseCount('listing_audit_logs', 1);
+    $this->assertDatabaseHas('listing_audit_logs', [
+        'listing_id' => 123,
+        'action' => 'deleted',
+        'message' => "Deleted listing 'Driver X' (id: 123) by user 45",
+    ]);
+
+    $entry = AuditLogModel::first();
+    expect($entry->metadata)->toBe(['title' => 'Driver X']);
+});

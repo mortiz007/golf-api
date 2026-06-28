@@ -35,14 +35,24 @@ final class AuditMessage
     /**
      * Builds the normative legible message for a listing audit fact
      * (SPECS §5 / DESIGN §IV.3): "Created listing 'X' (id: N) by user M".
+     *
+     * When $changedFields is provided (updates), the changed field names are
+     * listed: "Updated listing 'X' (id: N): title, price by user M".
+     *
+     * @param  list<string>  $changedFields
      */
-    public static function forListing(AuditAction $action, string $title, int $listingId, int $userId): self
+    public static function forListing(AuditAction $action, string $title, int $listingId, int $userId, array $changedFields = []): self
     {
+        $fields = $changedFields !== []
+            ? ': '.implode(', ', $changedFields)
+            : '';
+
         return new self(sprintf(
-            "%s listing '%s' (id: %d) by user %d",
+            "%s listing '%s' (id: %d)%s by user %d",
             $action->verb(),
             $title,
             $listingId,
+            $fields,
             $userId,
         ));
     }

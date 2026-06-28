@@ -51,6 +51,7 @@ it('records an audit entry building the legible message', function () {
     $entry = $repo->saved[0];
     expect((string) $entry->eventId())->toBe('550e8400-e29b-41d4-a716-446655440000')
         ->and($entry->userId())->toBe(45)
+        ->and($entry->listingId())->toBe(123)
         ->and($entry->action())->toBe(AuditAction::Created)
         ->and((string) $entry->message())->toBe("Created listing 'Driver X' (id: 123) by user 45")
         ->and($entry->metadata())->toBe(['id' => 123, 'title' => 'Driver X', 'price' => 199.99]);

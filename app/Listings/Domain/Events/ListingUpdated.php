@@ -13,11 +13,10 @@ use InvalidArgumentException;
 /**
  * Domain event emitted right after a Listing is updated (SPECS §5 / DESIGN §IV.2).
  *
- * Immutable. Carries the same normative payload as ListingCreated (minimal
- * snapshot, excluding ai_enrichment/moderation_result — SPECS #17).
- *
- * NOTE: wired for AuditLog consumption (decision 2-B). The PATCH emitter does
- * not exist yet; this class enables the generic listener to subscribe now.
+ * Immutable. The listing_snapshot carries the current title plus a `changes`
+ * diff with only the user-submitted fields that actually changed, each as
+ * { "old": ..., "new": ... }. System side-effects (moderation_status,
+ * ai_enrichment_status) are intentionally excluded.
  */
 final class ListingUpdated
 {
@@ -37,12 +36,14 @@ final class ListingUpdated
     public readonly array $listingSnapshot;
 
     /**
-     * @param  Listing  $listing  Persisted listing (must already have an id).
+     * @param  Listing  $listing  Updated, persisted listing (must already have an id).
+     * @param  array<string, array{old: mixed, new: mixed}>  $changes  User-submitted fields that changed.
      * @param  Uuid|null  $eventId  Optional injected id (default: new UUID v4).
      * @param  DateTimeImmutable|null  $occurredAt  Optional injected timestamp (default: now UTC).
      */
     public function __construct(
         Listing $listing,
+        array $changes,
         ?Uuid $eventId = null,
         ?DateTimeImmutable $occurredAt = null,
     ) {
@@ -55,28 +56,20 @@ final class ListingUpdated
         $this->occurredAt = $occurredAt ?? new DateTimeImmutable('now', new DateTimeZone('UTC'));
         $this->userId = $listing->userId();
         $this->listingId = $listing->id();
-        $this->listingSnapshot = self::buildSnapshot($listing);
+        $this->listingSnapshot = self::buildSnapshot($listing, $changes);
     }
 
     /**
-     * Builds the minimal snapshot defined in DESIGN §IV.2.
+     * Builds the update snapshot: the current title plus the changed-fields diff.
      *
+     * @param  array<string, array{old: mixed, new: mixed}>  $changes
      * @return array<string, mixed>
      */
-    private static function buildSnapshot(Listing $listing): array
+    private static function buildSnapshot(Listing $listing, array $changes): array
     {
-        $endDate = $listing->endDate();
-
         return [
-            'id' => $listing->id(),
             'title' => (string) $listing->title(),
-            'price' => $listing->price()->value(),
-            'condition' => (string) $listing->condition(),
-            'description' => (string) $listing->description(),
-            'category_id' => $listing->categoryId(),
-            'moderation_status' => $listing->moderationStatus()->value,
-            'created_at' => $listing->createdAt()->format(DateTimeImmutable::ATOM),
-            'end_date' => $endDate?->toString(),
+            'changes' => $changes,
         ];
     }
 

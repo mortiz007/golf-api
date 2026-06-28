@@ -274,7 +274,9 @@ Eventos: `ListingCreated`, `ListingUpdated`, `ListingDeleted`. `EVENT_VERSION = 
 
 ### 4.1 Payload normativo
 
-IDs de negocio (`user_id`, `listing_id`) son **BIGINT**; `event_id` es **UUID v4** (identificador del evento para idempotencia). El `listing_snapshot` es mínimo: excluye `ai_enrichment` y `moderation_result`.
+IDs de negocio (`user_id`, `listing_id`) son **BIGINT**; `event_id` es **UUID v4** (identificador del evento para idempotencia). Los tres eventos comparten el mismo envelope (`event_id`, `event_version`, `occurred_at`, `user_id`, `listing_id`, `listing_snapshot`); el `id` del listing nunca se duplica dentro de `listing_snapshot` y siempre se excluyen `ai_enrichment` y `moderation_result`. El contenido de `listing_snapshot` cambia según el tipo de evento.
+
+**`ListingCreated`** — snapshot completo del estado inicial (sin `id`):
 
 ```json
 {
@@ -284,7 +286,6 @@ IDs de negocio (`user_id`, `listing_id`) son **BIGINT**; `event_id` es **UUID v4
   "user_id": 45,
   "listing_id": 123,
   "listing_snapshot": {
-    "id": 123,
     "title": "Driver X",
     "price": 199.99,
     "condition": "Used",
@@ -294,6 +295,26 @@ IDs de negocio (`user_id`, `listing_id`) son **BIGINT**; `event_id` es **UUID v4
     "created_at": "2026-06-23T22:59:59Z",
     "end_date": null
   }
+}
+```
+
+**`ListingUpdated`** — `title` actual + `changes` (solo los campos enviados por el usuario que cambiaron, cada uno con `old`/`new`). No incluye side-effects del sistema (`moderation_status`, `ai_enrichment_status`). El evento **no se publica** si `changes` queda vacío.
+
+```json
+"listing_snapshot": {
+  "title": "New Title",
+  "changes": {
+    "title": { "old": "Old Title", "new": "New Title" },
+    "price": { "old": 199.99, "new": 250.00 }
+  }
+}
+```
+
+**`ListingDeleted`** — snapshot mínimo con solo el `title`; el momento de la cancelación lo cubre `occurred_at`.
+
+```json
+"listing_snapshot": {
+  "title": "Driver X"
 }
 ```
 
@@ -308,7 +329,7 @@ Fechas en ISO 8601 / UTC; `price` serializado como decimal.
    - **Nuevo** → INSERT con `user_id`, `listing_id`, `action`, `message`, `metadata`, `event_id`.
 4. Fallo persistente → `failed_jobs` (DLQ).
 
-`message` legible, ej.: `"Created listing 'Driver X' (id: 123) by user 45"`. `metadata` = snapshot del payload. Solo se auditan `ListingCreated`/`ListingUpdated`/`ListingDeleted`; no se auditan resultados de moderación/enriquecimiento.
+`message` legible, ej.: `"Created listing 'Driver X' (id: 123) by user 45"`; en updates se listan los campos cambiados, ej.: `"Updated listing 'Driver X' (id: 123): title, price by user 45"`. `metadata` = `listing_snapshot` del payload. Solo se auditan `ListingCreated`/`ListingUpdated`/`ListingDeleted`; no se auditan resultados de moderación/enriquecimiento.
 
 ---
 

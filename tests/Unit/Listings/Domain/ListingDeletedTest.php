@@ -3,29 +3,27 @@
 declare(strict_types=1);
 
 use App\Listings\Domain\Entities\Listing;
-use App\Listings\Domain\Events\ListingCreated;
+use App\Listings\Domain\Events\ListingDeleted;
 use App\Listings\Domain\ValueObjects\Description;
-use App\Listings\Domain\ValueObjects\EndDate;
 use App\Listings\Domain\ValueObjects\ListingCondition;
 use App\Listings\Domain\ValueObjects\Price;
 use App\Listings\Domain\ValueObjects\Title;
 use App\Listings\Domain\ValueObjects\Uuid;
 
-function persistedListing(): Listing
+function deletedListing(): Listing
 {
     return Listing::create(
         userId: 45,
         categoryId: 1,
-        title: new Title('Driver Pro'),
+        title: new Title('Driver X'),
         price: new Price(199.99),
         condition: new ListingCondition('Used'),
         description: new Description('Great club for sale here'),
-        endDate: new EndDate((new DateTimeImmutable('+10 days'))->format('Y-m-d')),
     )->withId(123);
 }
 
-it('builds the normative payload structure', function () {
-    $event = new ListingCreated(persistedListing());
+it('builds the normative envelope structure', function () {
+    $event = new ListingDeleted(deletedListing());
     $payload = $event->toArray();
 
     expect($payload)->toHaveKeys([
@@ -35,22 +33,16 @@ it('builds the normative payload structure', function () {
         ->and($payload['listing_id'])->toBe(123);
 });
 
-it('builds a minimal snapshot without id, ai or moderation result', function () {
-    $event = new ListingCreated(persistedListing());
+it('carries only the title in the snapshot', function () {
+    $event = new ListingDeleted(deletedListing());
     $snapshot = $event->listingSnapshot;
 
-    expect($snapshot)->toHaveKeys([
-        'title', 'price', 'condition', 'description',
-        'category_id', 'moderation_status', 'created_at', 'end_date',
-    ])->and($snapshot)->not->toHaveKey('id')
-        ->and($snapshot)->not->toHaveKey('ai_enrichment')
-        ->and($snapshot)->not->toHaveKey('moderation_result')
-        ->and($snapshot['moderation_status'])->toBe('pending');
+    expect($snapshot)->toBe(['title' => 'Driver X']);
 });
 
 it('honors an injected event id for determinism', function () {
     $uuid = Uuid::v4();
-    $event = new ListingCreated(persistedListing(), eventId: $uuid);
+    $event = new ListingDeleted(deletedListing(), eventId: $uuid);
 
     expect($event->eventId)->toBe((string) $uuid);
 });
@@ -65,11 +57,5 @@ it('rejects building the event from a non-persisted listing', function () {
         description: new Description('Great club for sale here'),
     );
 
-    expect(fn () => new ListingCreated($listing))->toThrow(InvalidArgumentException::class);
-});
-
-it('generates valid RFC 4122 v4 uuids', function () {
-    expect((string) Uuid::v4())->toMatch(
-        '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/'
-    );
+    expect(fn () => new ListingDeleted($listing))->toThrow(InvalidArgumentException::class);
 });

@@ -68,7 +68,6 @@ final class ListingCreated
         $endDate = $listing->endDate();
 
         return [
-            'id' => $listing->id(),
             'title' => (string) $listing->title(),
             'price' => $listing->price()->value(),
             'condition' => (string) $listing->condition(),

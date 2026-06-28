@@ -17,9 +17,8 @@ use DateTimeZone;
  * attributes of the `listing_audit_logs` table. Used ONLY by
  * EloquentAuditLogRepository (S2-08).
  *
- * `listing_id` is derived from the event snapshot (metadata['id']): the frozen
- * entity factory carries it inside the payload metadata rather than as a
- * standalone field (S2-02 decision).
+ * `listing_id` comes from the entity (carried from the event envelope's
+ * listing_id), independent of the variable shape of the snapshot metadata.
  */
 final class AuditLogMapper
 {
@@ -30,15 +29,13 @@ final class AuditLogMapper
      */
     public function toAttributes(AuditLogEntry $entry): array
     {
-        $metadata = $entry->metadata();
-
         return [
             'event_id' => (string) $entry->eventId(),
             'user_id' => $entry->userId(),
-            'listing_id' => (int) ($metadata['id'] ?? 0),
+            'listing_id' => $entry->listingId(),
             'action' => $entry->action()->value,
             'message' => (string) $entry->message(),
-            'metadata' => $metadata,
+            'metadata' => $entry->metadata(),
         ];
     }
 
@@ -51,6 +48,7 @@ final class AuditLogMapper
             id: (int) $model->id,
             eventId: new EventId($model->event_id),
             userId: (int) $model->user_id,
+            listingId: (int) $model->listing_id,
             action: AuditAction::from($model->action),
             message: new AuditMessage($model->message),
             metadata: $model->metadata ?? [],

@@ -28,6 +28,7 @@ final class AuditLogEntry
         private readonly ?int $id,
         private readonly EventId $eventId,
         private readonly int $userId,
+        private readonly int $listingId,
         private readonly AuditAction $action,
         private readonly AuditMessage $message,
         private readonly array $metadata,
@@ -42,6 +43,7 @@ final class AuditLogEntry
     public static function record(
         EventId $eventId,
         int $userId,
+        int $listingId,
         AuditAction $action,
         AuditMessage $message,
         array $metadata,
@@ -50,6 +52,7 @@ final class AuditLogEntry
             id: null,
             eventId: $eventId,
             userId: $userId,
+            listingId: $listingId,
             action: $action,
             message: $message,
             metadata: $metadata,
@@ -66,6 +69,7 @@ final class AuditLogEntry
         int $id,
         EventId $eventId,
         int $userId,
+        int $listingId,
         AuditAction $action,
         AuditMessage $message,
         array $metadata,
@@ -75,6 +79,7 @@ final class AuditLogEntry
             id: $id,
             eventId: $eventId,
             userId: $userId,
+            listingId: $listingId,
             action: $action,
             message: $message,
             metadata: $metadata,
@@ -95,6 +100,11 @@ final class AuditLogEntry
     public function userId(): int
     {
         return $this->userId;
+    }
+
+    public function listingId(): int
+    {
+        return $this->listingId;
     }
 
     public function action(): AuditAction

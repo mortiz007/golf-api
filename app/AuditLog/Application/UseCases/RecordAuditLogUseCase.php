@@ -32,15 +32,21 @@ final class RecordAuditLogUseCase
     {
         $action = AuditAction::from($command->action);
 
+        $changedFields = $action === AuditAction::Updated
+            ? array_keys($command->snapshot['changes'] ?? [])
+            : [];
+
         $entry = AuditLogEntry::record(
             eventId: new EventId($command->eventId),
             userId: $command->userId,
+            listingId: $command->listingId,
             action: $action,
             message: AuditMessage::forListing(
                 $action,
                 $command->listingTitle,
                 $command->listingId,
                 $command->userId,
+                $changedFields,
             ),
             metadata: $command->snapshot,
         );

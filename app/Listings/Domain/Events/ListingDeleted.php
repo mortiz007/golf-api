@@ -14,11 +14,8 @@ use InvalidArgumentException;
  * Domain event emitted right after a Listing is cancelled/deleted
  * (SPECS §5 / DESIGN §IV.2).
  *
- * Immutable. Carries the same normative payload as ListingCreated (minimal
- * snapshot, excluding ai_enrichment/moderation_result — SPECS #17).
- *
- * NOTE: wired for AuditLog consumption (decision 2-B). The DELETE emitter does
- * not exist yet; this class enables the generic listener to subscribe now.
+ * Immutable. Carries the common event envelope with a minimal listing_snapshot
+ * that retains only the title; the deletion timestamp is conveyed by occurred_at.
  */
 final class ListingDeleted
 {
@@ -60,24 +57,16 @@ final class ListingDeleted
     }
 
     /**
-     * Builds the minimal snapshot defined in DESIGN §IV.2.
+     * Builds the minimal deletion snapshot defined in DESIGN §IV.2.
+     *
+     * Only the title is retained; the "when" is covered by occurred_at.
      *
      * @return array<string, mixed>
      */
     private static function buildSnapshot(Listing $listing): array
     {
-        $endDate = $listing->endDate();
-
         return [
-            'id' => $listing->id(),
             'title' => (string) $listing->title(),
-            'price' => $listing->price()->value(),
-            'condition' => (string) $listing->condition(),
-            'description' => (string) $listing->description(),
-            'category_id' => $listing->categoryId(),
-            'moderation_status' => $listing->moderationStatus()->value,
-            'created_at' => $listing->createdAt()->format(DateTimeImmutable::ATOM),
-            'end_date' => $endDate?->toString(),
         ];
     }
 
