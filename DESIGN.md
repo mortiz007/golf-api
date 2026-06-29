@@ -771,47 +771,6 @@ Al crear o actualizar se encolan **dos jobs independientes y paralelos** en la m
 - **ModerationJob:** clasifica el contenido → escribe `moderation_result` y resuelve `moderation_status` (`approved` / `rejected`).
 - **EnrichmentJob:** genera `model_evaluation` + `estimated_market_value` → escribe `ai_enrichment` y resuelve `ai_enrichment_status`.
 
-**Ciclo de vida del listing** (estados derivados de creación, jobs LLM y cancelación):
-
-```mermaid
-stateDiagram-v2
-    direction LR
-
-    state moderationStatus {
-        modPending: pending
-        approved: approved
-        rejected: rejected
-        [*] --> modPending: POST
-        modPending --> approved: ModerationJob ok
-        modPending --> rejected: ModerationJob ok
-        modPending --> modPending: fallo -> fallback (sigue oculto)
-        approved --> modPending: PATCH title/description
-        rejected --> modPending: PATCH title/description
-    }
-
-    state aiEnrichmentStatus {
-        enrPending: pending
-        succeeded: succeeded
-        failed: failed
-        [*] --> enrPending: POST
-        enrPending --> succeeded: EnrichmentJob ok
-        enrPending --> failed: EnrichmentJob fallo definitivo
-        succeeded --> enrPending: PATCH price/condition
-        failed --> enrPending: PATCH price/condition
-    }
-
-    state cancellation {
-        active: activo
-        cancelled: cancelled_at = now
-        [*] --> active: POST
-        active --> cancelled: DELETE
-        cancelled --> cancelled: DELETE idempotente (no-op)
-    }
-```
-
-> [!NOTE]
-> Solo los listings con `moderation_status=approved`, `cancelled_at IS NULL` y `end_date` vigente (o nulo) son visibles en el listado público por defecto (§3.5).
-
 > [!NOTE]
 > **Persistencia acotada por columna:** `ListingRepositoryPort` expone `updateModerationResult(...)` y `updateEnrichment(...)` que cargan el modelo y persisten únicamente las columnas sucias, preservando la columna del otro proceso. Si el listing ya no existe al ejecutar el job, el use case retorna `false` y el job emite `job.skipped` (no-op).
 
@@ -819,21 +778,21 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TD
-    start["Job ejecuta handle()"] --> call["Invoca Use Case -> LlmPort"]
-    call --> result{"Resultado"}
-    result -->|Éxito| persistOk["Persiste resultado y estado"]
-    result -->|OllamaException| retryable{"isRetryable()?"}
+    startNode["Job ejecuta handle()"] --> invokeNode["Invoca Use Case → LlmPort"]
+    invokeNode --> resultNode{"Resultado"}
+    resultNode -->|Éxito| persistOk["Persiste resultado y estado"]
+    resultNode -->|OllamaException| retryable{"isRetryable()?"}
 
-    retryable -->|"No (4xx, JSON/schema inválido)"| failNow["this->fail() -> DLQ inmediato"]
-    retryable -->|"Sí (conexión, 5xx)"| rethrow["throw -> reintento"]
-    rethrow --> tries{"attempts < 3?"}
+    retryable -->|"No (4xx, JSON/schema inválido)"| failNow["$this->fail() → DLQ inmediato"]
+    retryable -->|"Sí (conexión, 5xx)"| rethrow["throw → reintento"]
+    rethrow --> tries{"attempts menor a 3?"}
     tries -->|Sí| backoff["Backoff 5s / 15s / 30s"]
-    backoff --> start
+    backoff --> startNode
     tries -->|No| failNow
 
     failNow --> fb["failed(): fallback por job"]
-    fb --> fbMod["Moderación -> moderation_status=pending (oculto)"]
-    fb --> fbEnr["Enrichment -> ai_enrichment_status=failed"]
+    fb --> fbMod["Moderación → moderation_status = pending (oculto)"]
+    fb --> fbEnr["Enrichment → ai_enrichment_status = failed"]
     fb --> dlq["failed_jobs (DLQ)"]
     fb -.->|"si el fallback falla"| ffail["emite job.fallback_failed"]
 ```
