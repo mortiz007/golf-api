@@ -47,5 +47,4 @@ The AI assistant was used during all development phases but mainly for:
 - To initialize and create the main structure of project.
 - In general it was used in shorts verification loop and rejected for large tasks.
 
-
-For more documentation details read: **DESIGN.md**
+    **NOTE:**: For more documentation details read: [DESIGN.md](DESIGN.md).
