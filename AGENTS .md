@@ -1,4 +1,4 @@
-# AGENTS_technical_assessment.md — AI Agent Operating Guide (Golf Listing API)
+# AGENTS.md — AI Agent Operating Guide (Golf Listing API)
 
 Vendor-neutral context file. Any AI coding agent can read this to install, configure, run, test and modify the project without extra guidance. It describes the system as implemented; where this file disagrees with code, trust the code and report the drift.
 
@@ -48,10 +48,10 @@ CREATE DATABASE IF NOT EXISTS golf_api_testing CHARACTER SET utf8mb4 COLLATE utf
 
 `database/seeders/TokenSeeder.php` creates two Sanctum tokens. Use them as `Authorization: Bearer <token>`:
 
-| User         | Email            | Bearer token                |
-| ------------ | ---------------- | --------------------------- |
-| Alice Walker | alice@golf.test  | `1\|golf-seed-token-alice`  |
-| Bob Stone    | bob@golf.test    | `2\|golf-seed-token-bob`    |
+| User         | Email           | Bearer token               |
+| ------------ | --------------- | -------------------------- |
+| Alice Walker | alice@golf.test | `1\|golf-seed-token-alice` |
+| Bob Stone    | bob@golf.test   | `2\|golf-seed-token-bob`   |
 
 The seeders also create 7 categories (ids 1-7 in this order: `Drivers, Woods, Hybrids, Driving Irons, Irons, Wedges, Putters`) and 10 listings that cover every public-visibility scenario.
 
@@ -82,35 +82,38 @@ composer dev
 Defined in `.env` (copy from `.env.example`). Key entries:
 
 ### Core
-| Variable          | Example / Default      | Notes                                             |
-| ----------------- | ---------------------- | ------------------------------------------------- |
-| `APP_KEY`         | (generated)            | Run `php artisan key:generate`.                   |
-| `APP_URL`         | `http://localhost:8000`|                                                   |
-| `DB_CONNECTION`   | `mysql`                |                                                   |
-| `DB_HOST`         | `127.0.0.1`            |                                                   |
-| `DB_PORT`         | `3306`                 |                                                   |
-| `DB_DATABASE`     | `golf_api`             | Test suite uses `golf_api_testing` (see §5).      |
-| `DB_USERNAME`     | `root`                 |                                                   |
-| `DB_PASSWORD`     | `admin`                |                                                   |
-| `QUEUE_CONNECTION`| `database`             | Async jobs + DLQ (`failed_jobs`).                 |
-| `CACHE_STORE`     | `database`             |                                                   |
-| `SESSION_DRIVER`  | `database`             |                                                   |
-| `LOG_CHANNEL`     | `stack`                | Operational telemetry also goes to `stdout` (JSON Lines), see §7. |
+
+| Variable           | Example / Default       | Notes                                                             |
+| ------------------ | ----------------------- | ----------------------------------------------------------------- |
+| `APP_KEY`          | (generated)             | Run `php artisan key:generate`.                                   |
+| `APP_URL`          | `http://localhost:8000` |                                                                   |
+| `DB_CONNECTION`    | `mysql`                 |                                                                   |
+| `DB_HOST`          | `127.0.0.1`             |                                                                   |
+| `DB_PORT`          | `3306`                  |                                                                   |
+| `DB_DATABASE`      | `golf_api`              | Test suite uses `golf_api_testing` (see §5).                      |
+| `DB_USERNAME`      | `root`                  |                                                                   |
+| `DB_PASSWORD`      | `admin`                 |                                                                   |
+| `QUEUE_CONNECTION` | `database`              | Async jobs + DLQ (`failed_jobs`).                                 |
+| `CACHE_STORE`      | `database`              |                                                                   |
+| `SESSION_DRIVER`   | `database`              |                                                                   |
+| `LOG_CHANNEL`      | `stack`                 | Operational telemetry also goes to `stdout` (JSON Lines), see §7. |
 
 ### Business
-| Variable                        | Default | Notes                                                       |
-| ------------------------------- | ------- | ----------------------------------------------------------- |
+
+| Variable                        | Default | Notes                                                                |
+| ------------------------------- | ------- | -------------------------------------------------------------------- |
 | `LISTINGS_DAILY_CREATION_LIMIT` | `10`    | Per-user/day cap on `POST /api/v1/listings` (`config/listings.php`). |
 
 ### LLM provider (`config/llm.php`)
-| Variable            | Default                     | Notes                                                            |
-| ------------------- | --------------------------- | ---------------------------------------------------------------- |
-| `LLM_PROVIDER`      | `mock`                      | `mock` (deterministic, in-process) or `ollama` (real, local).   |
-| `OLLAMA_BASE_URL`   | `http://localhost:11434`    | Ollama server; adapter calls `POST /api/chat`.                  |
-| `OLLAMA_MODEL`      | `qwen2.5-coder:7b`          | Pull it first: `ollama pull qwen2.5-coder:7b`.                  |
-| `OLLAMA_TIMEOUT`    | `60`                        | Seconds per HTTP call.                                          |
-| `OLLAMA_TEMPERATURE`| `0.1`                       | Low for stable JSON output.                                    |
-| `OLLAMA_KEEP_ALIVE` | `5m`                        | Ollama model keep-alive.                                       |
+
+| Variable             | Default                  | Notes                                                         |
+| -------------------- | ------------------------ | ------------------------------------------------------------- |
+| `LLM_PROVIDER`       | `mock`                   | `mock` (deterministic, in-process) or `ollama` (real, local). |
+| `OLLAMA_BASE_URL`    | `http://localhost:11434` | Ollama server; adapter calls `POST /api/chat`.                |
+| `OLLAMA_MODEL`       | `qwen2.5-coder:7b`       | Pull it first: `ollama pull qwen2.5-coder:7b`.                |
+| `OLLAMA_TIMEOUT`     | `60`                     | Seconds per HTTP call.                                        |
+| `OLLAMA_TEMPERATURE` | `0.1`                    | Low for stable JSON output.                                   |
+| `OLLAMA_KEEP_ALIVE`  | `5m`                     | Ollama model keep-alive.                                      |
 
 Provider binding lives in `App\Providers\ListingsServiceProvider` (reads `config/llm.php`). To use the real LLM: set `LLM_PROVIDER=ollama`, run `ollama serve`, and `ollama pull qwen2.5-coder:7b`. Keep `LLM_PROVIDER=mock` for tests/CI and offline work.
 
@@ -197,7 +200,13 @@ Code style:
 Error envelope (normative) for JSON requests:
 
 ```json
-{ "error": { "code": "VALIDATION_ERROR", "message": "Validation failed", "details": { "field": ["msg"] } } }
+{
+    "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Validation failed",
+        "details": { "field": ["msg"] }
+    }
+}
 ```
 
 Mapping is centralized in `bootstrap/app.php`. Codes: `VALIDATION_ERROR` (422), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `RATE_LIMITED` (429).
@@ -212,20 +221,21 @@ IMPORTANT for any client/agent calling the API: always send `Accept: application
 - Column-scoped persistence: `updateModerationResult(...)` and `updateEnrichment(...)` write only their own dirty columns, so the two jobs never overwrite each other.
 - Retry policy: `$tries = 3`, exponential backoff `[5, 15, 30]` seconds.
 - Fallback after retries are exhausted (`failed()`):
-  - Moderation -> `moderation_status` stays `pending` (listing not publicly visible); error recorded in `moderation_result`.
-  - Enrichment -> `ai_enrichment_status = failed`; error recorded in `ai_enrichment`.
-  - Job lands in `failed_jobs` (DLQ).
+    - Moderation -> `moderation_status` stays `pending` (listing not publicly visible); error recorded in `moderation_result`.
+    - Enrichment -> `ai_enrichment_status = failed`; error recorded in `ai_enrichment`.
+    - Job lands in `failed_jobs` (DLQ).
 - LLM adapter (`OllamaLlmProvider`): on any transport/contract violation (connection error, HTTP error, invalid JSON) it throws `OllamaException` so the retry/backoff/fallback/DLQ path applies. It never returns a degraded result.
 - Audit pipeline: Use Cases publish domain events after commit; `RecordAuditLogListener` (`ShouldQueue`, `database`) writes the audit row with idempotent `firstOrCreate(['event_id' => ...])` (UNIQUE `event_id`). 3 tries; persistent failure -> DLQ.
 - Telemetry: structured JSON Lines to `stdout` via `App\Support\Telemetry` (Monolog channel `stdout`), separate from the business `AuditLog`. Events: `http.request`/`http.outcome`, `job.start`/`job.outcome`/`job.failed`, `ollama.request`/`ollama.outcome`. Only identifiers/metadata are logged — never user content (`title`, `description`), credentials, or the `q` query string.
 
 ---
 
-## 8. Endpoint Description  
+## 8. Endpoint Description
 
 Base path `/api/v1`. Authenticated routes (everything except `GET /api/v1/listings`) apply `auth:sanctum` + `throttle:60,1`. Source: `routes/api.php`, the FormRequests, Use Cases and `EloquentListingQueryRepository`.
 
 ### `GET /api/v1/listings` — public list (no auth)
+
 - Query params (`ListListingsRequest`): `min_price` (numeric, min 0), `max_price` (numeric, min 0), `category_id` (integer, `exists:categories,id`), `condition` (`in:New,Used,Refurbished,Like New`), `q` (string, max 255), `show_all` (boolean), `page` (int, min 1), `per_page` (int, min 1, max 100). Invalid -> 422 envelope.
 - `q` does a `LIKE %term%` over `title` OR `description`.
 - Visibility (`show_all=false`, default): `moderation_status='approved'` AND `cancelled_at IS NULL` AND (`end_date IS NULL` OR `end_date >= today`); ordered `created_at ASC`.
@@ -235,6 +245,7 @@ Base path `/api/v1`. Authenticated routes (everything except `GET /api/v1/listin
 - Codes: 200, 422.
 
 ### `POST /api/v1/listings` — create (auth; owner is the caller)
+
 - Extra limiter: `throttle:listing-creation` = `LISTINGS_DAILY_CREATION_LIMIT` per user per day (429 when exceeded), on top of `throttle:60,1`.
 - Validation (`StoreListingRequest`): `title` required, `^[A-Za-z ]+$`, 3-255, trimmed; `price` required numeric `0.01..99999999.99`; `condition` required enum; `description` required 10-1000, `strip_tags`+trim; `end_date` optional `Y-m-d`, `after_or_equal:today`; `category_id` required `exists:categories,id`.
 - Behavior: persists with `moderation_status=pending`, `ai_enrichment_status=pending`; publishes `ListingCreated` after commit; queues `ModerationJob` + `EnrichmentJob`.
@@ -242,6 +253,7 @@ Base path `/api/v1`. Authenticated routes (everything except `GET /api/v1/listin
 - Codes: 201, 422, 401, 429.
 
 ### `PATCH /api/v1/listings/{id}` — partial update (auth, owner-only)
+
 - Load order: missing OR cancelled listing -> 404 (`NOT_FOUND`); non-owner -> 403 (`FORBIDDEN`). Authorization is resolved in the Use Case (no Laravel Policy).
 - Only submitted fields change (`sometimes` rules, same constraints as create; `category_id` editable; `end_date` may be set to null).
 - Re-evaluation triggers (only when the value actually changes): `title` or `description` -> `moderation_status=pending` + re-queue `ModerationJob`; `price` or `condition` -> `ai_enrichment_status=pending` + re-queue `EnrichmentJob`; `category_id` alone triggers nothing.
@@ -249,17 +261,20 @@ Base path `/api/v1`. Authenticated routes (everything except `GET /api/v1/listin
 - Codes: 200, 403, 404 (missing or cancelled), 422, 401, 429.
 
 ### `DELETE /api/v1/listings/{id}` — cancel / soft-delete (auth, owner-only)
+
 - Missing -> 404; non-owner -> 403 (authorization checked BEFORE idempotency). Sets `cancelled_at=now`, publishes `ListingDeleted` after commit.
 - Idempotent: deleting an already-cancelled listing returns 204 and does NOT re-persist or re-publish.
 - Response 204, no body. Codes: 204, 403, 404, 401, 429.
 
 ### `GET /api/v1/audit-logs` — current user's audit log (auth)
+
 - Returns only the authenticated user's entries, `created_at DESC`, paginated 20/page (`data` + `meta` + `links`).
 - Item: `id, action(created|updated|deleted), message, metadata(payload snapshot), created_at`.
 - Requires a running queue worker for entries to exist (events are processed asynchronously).
 - Codes: 200, 401, 429.
 
-### Known v1.0 trade-offs 
+### Known v1.0 trade-offs
+
 - `user` shape differs by endpoint: writes return `{ name }`, the public list returns `{ first_name, last_name }` (split from `name`).
 - Owner-only is enforced only in the Use Case (no Policy), to preserve hexagonal dependency rules.
 

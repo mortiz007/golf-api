@@ -1,59 +1,51 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# README — LLM Choice, Failure Handling & AI Assistance
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Short companion notes for the Golf Listing API. For full setup/run/test details see [AGENTS.md](AGENTS.md).
 
-## About Laravel
+## LLM Provider & Why
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+The LLM integration sits behind a single domain port, `App\Listings\Domain\Contracts\LlmPort`, with the active adapter selected in `config/llm.php` (`LLM_PROVIDER`). Two adapters ship:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **Ollama (real provider)** — `OllamaLlmProvider`, talking to a local Ollama server (`POST /api/chat`) running **`qwen2.5-coder:7b`** at `temperature 0.1` with `format: json`.
+- **Mock (deterministic)** — `LlmProviderMock`, in-process, used for tests/CI and offline development (default in `.env.example`).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Why this choice:
 
-## Learning Laravel
+- **Local and zero-cost.** Ollama runs on the developer's machine with no API keys, no per-token billing, and no data leaving the host — a good fit for a 20h, single-developer budget.
+- **Deterministic, low-temperature JSON.** `temperature 0.1` + `format: json` keeps moderation/enrichment output parseable; `qwen2.5-coder:7b` is small enough to run locally yet reliable at structured JSON.
+- **Swappable without touching the domain.** Because everything depends on `LlmPort`, the deterministic mock powers fast, hermetic tests, while production can switch to Ollama (or any future provider) by changing one config value — the hexagonal boundary stays intact.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## How Failures Are Handled
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Moderation and enrichment run as two independent, parallel queued jobs (`database` queue), each delegating to a Use Case that calls `LlmPort`.
 
-## Laravel Sponsors
+- **Adapter level:** `OllamaLlmProvider` throws `OllamaException` on connection errors, non-2xx HTTP, or non-JSON content. It never returns a degraded/partial result, so the failure always propagates to the job.
+- **Retries:** each job has `$tries = 3` with exponential backoff `[5, 15, 30]` seconds.
+- **Fallback after retries are exhausted (`failed()`):**
+    - Moderation -> `moderation_status` stays `pending`, so the listing remains **not publicly visible** (fail-safe); the error is written to `moderation_result`.
+    - Enrichment -> `ai_enrichment_status = failed`; the error is written to `ai_enrichment`.
+    - The job is dead-lettered to `failed_jobs` (inspect with `php artisan queue:failed`).
+- **Concurrency safety:** the two jobs write only their own columns (`updateModerationResult` / `updateEnrichment`), so parallel execution never causes last-writer-wins.
+- **Audit pipeline:** domain events are consumed by a queued listener that inserts idempotently via `firstOrCreate(['event_id' => ...])` (UNIQUE `event_id`), so retries/duplicates produce exactly one row; persistent failures also go to the DLQ.
+- **API errors:** validation/authorization/not-found map to a uniform envelope `{ error: { code, message, details } }` in `bootstrap/app.php` (422/403/404, plus 429/401 by HTTP status).
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## AI Assistance — Used & Rejected
 
-### Premium Partners
+**Used AI assistance for:**
+The AI assistant was used during all development phases but mainly for:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- Migrations and seeders.
+- Boilerplate (Value Objects, DTOs, Resources, FormRequests).
+- Drafting the Pest test suite (endpoint happy-paths, AuditLog idempotency, moderation fallback, boundary telemetry).
+- Generating the Postman collection (`postman/golf-api.postman_collection.json`) with positive/negative cases and automated flows, **derived from seeders.**
+- Writing prompts and the JSON response mapping for the Ollama adapter.
+- Documentation.
 
-## Contributing
+**Rejected:**
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- To design the solution.
+- To initialize and create the main structure of project.
+- In general it was used in shorts verification loop and rejected for large tasks.
 
-## Code of Conduct
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+For more documentation details read: **DESIGN.md**
